@@ -1,6 +1,10 @@
 package request
 
 import (
+	"net"
+	"strings"
+
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 
@@ -104,19 +108,55 @@ func MessagingOperationType(val string) attribute.KeyValue {
 }
 
 func SpanHost(span *Span) string {
+	return SpanHostResolvingDNS(span, nil)
+}
+
+func SpanHostResolvingDNS(span *Span, dnsCache *expirable.LRU[string, string]) string {
 	if span.HostName != "" {
 		return span.HostName
+	}
+
+	if addr := getAddrFromIP(span.Host, dnsCache); len(addr) > 0 {
+		return addr
 	}
 
 	return span.Host
 }
 
-func SpanPeer(span *Span) string {
+func getAddrFromIP(ip string, dnsCache *expirable.LRU[string, string]) string {
+	if dnsCache == nil {
+		return ""
+	}
+
+	if addr, ok := dnsCache.Get(ip); ok {
+		return addr
+	}
+
+	if net.ParseIP(ip) != nil {
+		domainNames, err := net.LookupAddr(ip)
+		if err == nil && len(domainNames) > 0 {
+			dnsCache.Add(ip, domainNames[0])
+			return strings.TrimSuffix(domainNames[0], ".")
+		}
+	}
+
+	return ip
+}
+
+func SpanPeerResolvingDNS(span *Span, dnsCache *expirable.LRU[string, string]) string {
 	if span.PeerName != "" {
 		return span.PeerName
 	}
 
+	if addr := getAddrFromIP(span.Peer, dnsCache); len(addr) > 0 {
+		return addr
+	}
+
 	return span.Peer
+}
+
+func SpanPeer(span *Span) string {
+	return SpanPeerResolvingDNS(span, nil)
 }
 
 func HostAsServer(span *Span) string {

@@ -38,6 +38,7 @@ const (
 
 const (
 	defaultMetricsTTL = 5 * time.Minute
+	defaultDNSTTL     = 24 * time.Hour
 )
 
 var DefaultConfig = Config{
@@ -94,6 +95,8 @@ var DefaultConfig = Config{
 		},
 		TTL:                         defaultMetricsTTL,
 		SpanMetricsServiceCacheSize: 10000,
+		DNSCacheSize:                1_000_000,
+		DNSCacheTTL:                 defaultDNSTTL,
 	},
 	Printer:      false, // Deprecated: use TracePrinter instead
 	TracePrinter: debug.TracePrinterDisabled,

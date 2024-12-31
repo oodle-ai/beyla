@@ -116,6 +116,9 @@ type PrometheusConfig struct {
 	TTL                         time.Duration `yaml:"ttl" env:"BEYLA_PROMETHEUS_TTL"`
 	SpanMetricsServiceCacheSize int           `yaml:"service_cache_size"`
 
+	DNSCacheSize int           `yaml:"dns_cache_size"`
+	DNSCacheTTL  time.Duration `yaml:"dns_ttl"`
+
 	AllowServiceGraphSelfReferences bool `yaml:"allow_service_graph_self_references" env:"BEYLA_PROMETHEUS_ALLOW_SERVICE_GRAPH_SELF_REFERENCES"`
 
 	// Registry is only used for embedding Beyla within the Grafana Agent.
@@ -198,6 +201,7 @@ type metricsReporter struct {
 	hostID      string
 
 	serviceCache *expirable.LRU[svc.UID, svc.Attrs]
+	dnsCache     *expirable.LRU[string, string]
 }
 
 func PrometheusEndpoint(
@@ -473,6 +477,8 @@ func newReporter(
 			mr.tracesTargetInfo.WithLabelValues(lv...).metric.Sub(1)
 		}, cfg.TTL)
 	}
+
+	mr.dnsCache = expirable.NewLRU[string, string](cfg.DNSCacheSize, nil, cfg.DNSCacheTTL)
 
 	registeredMetrics := []prometheus.Collector{mr.targetInfo}
 
@@ -759,17 +765,17 @@ func labelNamesServiceGraph() []string {
 func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 	if span.IsClientSpan() {
 		return []string{
-			request.SpanPeer(span),
+			request.SpanPeerResolvingDNS(span, r.dnsCache),
 			span.Service.UID.Namespace,
-			request.SpanHost(span),
+			request.SpanHostResolvingDNS(span, r.dnsCache),
 			span.OtherNamespace,
 			"beyla",
 		}
 	}
 	return []string{
-		request.SpanPeer(span),
+		request.SpanPeerResolvingDNS(span, r.dnsCache),
 		span.OtherNamespace,
-		request.SpanHost(span),
+		request.SpanHostResolvingDNS(span, r.dnsCache),
 		span.Service.UID.Namespace,
 		"beyla",
 	}
