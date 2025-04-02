@@ -216,6 +216,7 @@ type MetricsReporter struct {
 	attrGPUKernelGridSize     []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGPUKernelBlockSize    []attributes.Field[*request.Span, attribute.KeyValue]
 	attrGPUMemoryAllocations  []attributes.Field[*request.Span, attribute.KeyValue]
+	periodicReader            *metric.PeriodicReader
 }
 
 // Metrics is a set of metrics associated to a given OTEL MeterProvider.
@@ -365,6 +366,8 @@ func newMetricsReporter(
 		return nil, err
 	}
 	mr.exporter = instrumentMetricsExporter(ctxInfo.Metrics, exporter)
+	mr.periodicReader = metric.NewPeriodicReader(mr.exporter,
+		metric.WithInterval(mr.cfg.Interval))
 
 	return &mr, nil
 }
@@ -652,8 +655,7 @@ func (mr *MetricsReporter) newMetricsInstance(service *svc.Attrs) Metrics {
 
 	opts := []metric.Option{
 		metric.WithResource(resources),
-		metric.WithReader(metric.NewPeriodicReader(mr.exporter,
-			metric.WithInterval(mr.cfg.Interval))),
+		metric.WithReader(mr.periodicReader),
 	}
 
 	opts = append(opts, mr.otelMetricOptions(mlog)...)

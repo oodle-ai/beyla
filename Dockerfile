@@ -29,7 +29,7 @@ RUN /generate.sh
 RUN make compile
 
 # Create final image from minimal + built binary
-FROM scratch
+FROM golang:alpine
 
 LABEL maintainer="Grafana Labs <hello@grafana.com>"
 

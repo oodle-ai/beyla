@@ -23,7 +23,7 @@ COPY Makefile Makefile
 RUN make compile-cache-for-coverage
 
 # Create final image from minimal + built binary
-FROM scratch
+FROM golang:alpine
 
 WORKDIR /
 COPY --from=builder /src/bin/k8s-cache .

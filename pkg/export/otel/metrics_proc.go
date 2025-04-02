@@ -76,8 +76,9 @@ type procMetricsExporter struct {
 
 	// the observation code for disk and network metrics will be different depending on
 	// the *.io.direction attributes being selected or not
-	diskObserver func(context.Context, *procMetrics, *process.Status)
-	netObserver  func(context.Context, *procMetrics, *process.Status)
+	diskObserver   func(context.Context, *procMetrics, *process.Status)
+	netObserver    func(context.Context, *procMetrics, *process.Status)
+	periodicReader *metric.PeriodicReader
 }
 
 type procMetrics struct {
@@ -189,6 +190,9 @@ func newProcMetricsExporter(
 		return nil, err
 	}
 
+	mr.periodicReader = metric.NewPeriodicReader(mr.exporter,
+		metric.WithInterval(mr.cfg.Metrics.Interval))
+
 	return mr.Do, nil
 }
 
@@ -213,8 +217,7 @@ func (me *procMetricsExporter) newMetricSet(procID *process.ID) (*procMetrics, e
 	resources := resource.NewWithAttributes(semconv.SchemaURL, getProcessResourceAttrs(me.hostID, procID)...)
 	opts := []metric.Option{
 		metric.WithResource(resources),
-		metric.WithReader(metric.NewPeriodicReader(me.exporter,
-			metric.WithInterval(me.cfg.Metrics.Interval))),
+		metric.WithReader(me.periodicReader),
 	}
 
 	m := procMetrics{
