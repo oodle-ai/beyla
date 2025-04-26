@@ -177,6 +177,12 @@ func newProcMetricsExporter(
 			llog.Debug("evicting metrics reporter from cache")
 			v.value.cleanupAllMetricsInstances()
 			go func() {
+				defer func() {
+					if err := v.value.provider.Shutdown(ctx); err != nil {
+						llog.Warn("error shutting down metrics provider", "error", err)
+					}
+				}()
+
 				if err := v.value.provider.ForceFlush(ctx); err != nil {
 					llog.Warn("error flushing evicted metrics provider", "error", err)
 				}
