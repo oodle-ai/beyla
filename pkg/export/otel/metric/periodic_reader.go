@@ -169,6 +169,12 @@ func (r *PeriodicReader) run(ctx context.Context, interval time.Duration) {
 		case <-ticker.C:
 			err := r.collectAndExport(ctx)
 			if err != nil {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+
 				otel.Handle(err)
 			}
 		case errCh := <-r.flushCh:
@@ -333,11 +339,6 @@ func (r *PeriodicReader) Shutdown(ctx context.Context) error {
 				err = r.export(ctx, m)
 			}
 			r.rmPool.Put(m)
-		}
-
-		sErr := r.exporter.Shutdown(ctx)
-		if err == nil || errors.Is(err, ErrReaderShutdown) {
-			err = sErr
 		}
 
 		r.mu.Lock()

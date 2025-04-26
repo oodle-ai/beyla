@@ -6,7 +6,7 @@ CACHE_CMD ?= k8s-cache
 CACHE_MAIN_GO_FILE ?= cmd/$(CACHE_CMD)/main.go
 
 GOOS ?= linux
-GOARCH ?= amd64
+GOARCH ?= arm64
 
 # todo: upload to a grafana artifact
 PROTOC_IMAGE = docker.io/mariomac/protoc-go:latest
@@ -19,7 +19,7 @@ TEST_OUTPUT ?= ./testoutput
 
 IMG_REGISTRY ?= docker.io
 # Set your registry username. CI will set 'grafana' but you mustn't use it for manual pushing.
-IMG_ORG ?=
+IMG_ORG ?= oodle
 IMG_NAME ?= beyla
 # Container image creation creation
 VERSION ?= dev
@@ -250,6 +250,12 @@ coverage-report: cov-exclude-generated
 coverage-report-html: cov-exclude-generated
 	@echo "### Generating HTML coverage report"
 	go tool cover --html=$(TEST_OUTPUT)/cover.txt
+
+.PHONY: image-build
+image-build:
+	@echo "### Building and pushing the auto-instrumenter image"
+	$(call check_defined, IMG_ORG, Your Docker repository user name)
+	$(OCI_BIN) buildx build --platform linux/amd64,linux/arm64 -t ${IMG} .
 
 .PHONY: image-build
 image-build:
