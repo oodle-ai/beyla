@@ -114,13 +114,12 @@ func getLinuxProcess(cachedCopy *linuxProcess, procFSRoot string, pid int32, pri
 	}
 
 	// Reusing information from the last snapshot for the same process
-	// If the name or the PPID changed from the cachedCopy, we'll consider this sample is just
+	// If the name, PPID or start time changed from the cachedCopy, we'll consider this sample is just
 	// a new process that shares the PID with an old one.
-	// if a process with the same Command but different CommandLine or User name
-	// occupies the same PID, the cache won't refresh the CommandLine and Username.
 	if cachedCopy == nil ||
 		currentStats.command != cachedCopy.stats.command ||
-		currentStats.ppid != cachedCopy.stats.ppid {
+		currentStats.ppid != cachedCopy.stats.ppid ||
+		currentStats.startTime != cachedCopy.stats.startTime {
 
 		gops, err = process.NewProcess(pid)
 		if err != nil {
@@ -240,6 +239,7 @@ type procStats struct {
 	vmRSS      int64
 	vmSize     int64
 	cpu        CPUInfo
+	startTime  int64 // Add start time to track process creation time
 }
 
 // /proc/<pid>/stat standard field indices according to: http://man7.org/linux/man-pages/man5/proc.5.html
@@ -254,6 +254,7 @@ const (
 	statNumThreads = 17
 	statVsize      = 20
 	statRss        = 21
+	statStartTime  = 19
 )
 
 // readProcStat will gather information about the pid from /proc/<pid>/stat file.
@@ -298,6 +299,13 @@ func parseProcStat(content string) (procStats, error) {
 		return stats, errors.Wrapf(err, "for stats: %s", content)
 	}
 	stats.ppid = int32(ppid)
+
+	// Start time
+	startTime, err := strconv.ParseInt(fields[statStartTime], 10, 64)
+	if err != nil {
+		return stats, errors.Wrapf(err, "for stats: %s", content)
+	}
+	stats.startTime = startTime
 
 	// User time
 	utime, err := strconv.ParseInt(fields[statUtime], 10, 64)
