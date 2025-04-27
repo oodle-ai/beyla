@@ -221,6 +221,7 @@ func getFilteredProcessResourceAttrs(hostID string, procID *process.ID, attrSele
 		attr2.ProcCommandArgs.OTEL().StringSlice(procID.CommandArgs),
 		attr2.ProcExecName.OTEL().String(procID.ExecName),
 		attr2.ProcExecPath.OTEL().String(procID.ExecPath),
+		attr2.ProcStartTime.OTEL().String(strconv.Itoa(int(procID.StartTime))),
 	}
 	return getFilteredAttributesByPrefix(baseAttrs, attrSelector, procAttrs, []string{"process."})
 }
