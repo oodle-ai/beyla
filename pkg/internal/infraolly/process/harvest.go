@@ -125,6 +125,7 @@ func (ps *Harvester) populateStaticData(status *Status, process *linuxProcess) e
 	status.ID.ExecName = process.execName
 
 	status.ID.ProcessID = process.Pid()
+	status.ID.StartTime = process.stats.startTime
 
 	var err error
 	if status.ID.User, err = process.Username(); err != nil {
