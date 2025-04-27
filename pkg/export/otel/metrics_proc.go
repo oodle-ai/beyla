@@ -210,6 +210,7 @@ func getProcessResourceAttrs(hostID string, procID *process.ID) []attribute.KeyV
 		attr2.ProcCommandArgs.OTEL().StringSlice(procID.CommandArgs),
 		attr2.ProcExecName.OTEL().String(procID.ExecName),
 		attr2.ProcExecPath.OTEL().String(procID.ExecPath),
+		attr2.ProcStartTime.OTEL().String(strconv.Itoa(int(procID.StartTime))),
 	)
 }
 

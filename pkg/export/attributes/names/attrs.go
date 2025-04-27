@@ -123,6 +123,7 @@ const (
 	ProcCommandArgs = Name(semconv.ProcessCommandArgsKey)
 	ProcExecName    = Name(semconv.ProcessExecutableNameKey)
 	ProcExecPath    = Name(semconv.ProcessExecutablePathKey)
+	ProcStartTime   = Name(attribute.Key("process.start_time"))
 )
 
 // other beyla-specific attributes
