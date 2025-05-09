@@ -60,9 +60,16 @@ func (p *Tracer) SetupTailCalls() {
 			index: 0,
 			prog:  p.bpfObjects.BeylaExtendSkb,
 		},
+		{
+			index: 1,
+			prog:  p.bpfObjects.BeylaTcHttpEgress,
+		},
+		{
+			index: 2,
+			prog:  p.bpfObjects.BeylaTcHttpIngress,
+		},
 	} {
 		err := p.bpfObjects.TcL7JumpTable.Update(uint32(tc.index), uint32(tc.prog.FD()), ebpf.UpdateAny)
-
 		if err != nil {
 			p.log.Error("error loading info tail call jump table", "error", err)
 		}
