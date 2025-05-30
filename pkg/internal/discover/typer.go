@@ -3,6 +3,7 @@ package discover
 import (
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -169,7 +170,8 @@ func (t *typer) asInstrumentable(execElf *exec.FileInfo) ebpf.Instrumentable {
 
 func (t *typer) inspectOffsets(execElf *exec.FileInfo) (*goexec.Offsets, bool, error) {
 	if !t.cfg.Discovery.SystemWide {
-		if t.cfg.Discovery.SkipGoSpecificTracers {
+		forceGenericTracer := slices.Contains(t.cfg.Discovery.GenericTracerList, execElf.CmdExePath)
+		if t.cfg.Discovery.SkipGoSpecificTracers || forceGenericTracer {
 			t.log.Debug("skipping inspection for Go functions", "pid", execElf.Pid, "comm", execElf.CmdExePath)
 		} else {
 			t.log.Debug("inspecting", "pid", execElf.Pid, "comm", execElf.CmdExePath)
