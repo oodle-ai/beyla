@@ -69,6 +69,9 @@ type DiscoveryConfig struct {
 	// This can be enabled to use generic HTTP tracers only, no Go-specifics will be used:
 	SkipGoSpecificTracers bool `yaml:"skip_go_specific_tracers" env:"BEYLA_SKIP_GO_SPECIFIC_TRACERS"`
 
+	// Commands where generic tracer should be force used.
+	GenericTracerList []string `yaml:"generic_tracer_list" env:"BEYLA_GENERIC_TRACER_LIST" envSeparator:","`
+
 	// Debugging only option. Make sure the kernel side doesn't filter any PIDs, force user space filtering.
 	// nolint:undoc
 	BPFPidFilterOff bool `yaml:"bpf_pid_filter_off" env:"BEYLA_BPF_PID_FILTER_OFF"`
