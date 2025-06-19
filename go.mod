@@ -27,6 +27,7 @@ require (
 	github.com/prometheus/client_model v0.6.1
 	github.com/prometheus/common v0.55.0
 	github.com/prometheus/procfs v0.15.1
+	github.com/puzpuzpuz/xsync/v3 v3.5.1
 	github.com/shirou/gopsutil/v3 v3.24.4
 	github.com/stretchr/testify v1.10.0
 	github.com/vishvananda/netlink v1.3.0
