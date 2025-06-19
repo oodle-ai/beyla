@@ -28,6 +28,7 @@ require (
 	github.com/prometheus/client_model v0.6.1
 	github.com/prometheus/common v0.55.0
 	github.com/prometheus/procfs v0.15.1
+	github.com/puzpuzpuz/xsync/v3 v3.5.1
 	github.com/shirou/gopsutil/v3 v3.24.4
 	github.com/stretchr/testify v1.10.0
 	github.com/vishvananda/netlink v1.3.0
@@ -39,7 +40,6 @@ require (
 	go.opentelemetry.io/collector/config/confighttp v0.122.1
 	go.opentelemetry.io/collector/config/configopaque v1.28.1
 	go.opentelemetry.io/collector/config/configretry v1.28.1
-	go.opentelemetry.io/collector/config/configtelemetry v0.122.1
 	go.opentelemetry.io/collector/config/configtls v1.28.1
 	go.opentelemetry.io/collector/consumer v1.28.1
 	go.opentelemetry.io/collector/exporter v0.122.1
@@ -64,6 +64,7 @@ require (
 	golang.org/x/arch v0.7.0
 	golang.org/x/mod v0.23.0
 	golang.org/x/net v0.37.0
+	golang.org/x/sync v0.12.0
 	golang.org/x/sys v0.31.0
 	google.golang.org/grpc v1.71.0
 	google.golang.org/protobuf v1.36.5

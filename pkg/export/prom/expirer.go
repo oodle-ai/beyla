@@ -4,9 +4,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-
 	"github.com/grafana/beyla/v2/pkg/export/expire"
+	intern "github.com/grafana/beyla/v2/pkg/interner"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func plog() *slog.Logger {
@@ -15,8 +15,9 @@ func plog() *slog.Logger {
 
 // Expirer drops metrics from labels that haven't been updated during a given timeout
 type Expirer[T prometheus.Metric] struct {
-	entries *expire.ExpiryMap[*MetricEntry[T]]
-	wrapped *prometheus.MetricVec
+	entries  *expire.ExpiryMap[*MetricEntry[T]]
+	wrapped  *prometheus.MetricVec
+	interner *intern.StringInterner
 }
 
 type MetricEntry[T prometheus.Metric] struct {
@@ -28,8 +29,9 @@ type MetricEntry[T prometheus.Metric] struct {
 // if they haven't been updated during the last timeout period
 func NewExpirer[T prometheus.Metric](wrapped *prometheus.MetricVec, clock func() time.Time, expireTime time.Duration) *Expirer[T] {
 	return &Expirer[T]{
-		wrapped: wrapped,
-		entries: expire.NewExpiryMap[*MetricEntry[T]](clock, expireTime),
+		wrapped:  wrapped,
+		interner: intern.GetDefaultStringInterner(),
+		entries:  expire.NewExpiryMap[*MetricEntry[T]](clock, expireTime),
 	}
 }
 
@@ -39,6 +41,10 @@ func NewExpirer[T prometheus.Metric](wrapped *prometheus.MetricVec, clock func()
 // If not, a cached copy is returned and the "last access" cache time is updated.
 func (ex *Expirer[T]) WithLabelValues(lbls ...string) *MetricEntry[T] {
 	return ex.entries.GetOrCreate(lbls, func() *MetricEntry[T] {
+		for i := 0; i < len(lbls); i++ {
+			lbls[i] = ex.interner.Intern(lbls[i])
+		}
+
 		plog().With("labelValues", lbls).Debug("storing new metric label set")
 		c, err := ex.wrapped.GetMetricWithLabelValues(lbls...)
 		// same behavior as specific WithLabelValues implementations
