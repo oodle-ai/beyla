@@ -3,6 +3,7 @@ package prom
 import (
 	"context"
 	"fmt"
+	"github.com/grafana/beyla/v2/pkg/export/whitelister"
 	"runtime"
 	"slices"
 	"strconv"
@@ -227,7 +228,8 @@ type metricsReporter struct {
 	kubeEnabled bool
 	hostID      string
 
-	serviceCache *expirable.LRU[svc.UID, svc.Attrs]
+	serviceCache   *expirable.LRU[svc.UID, svc.Attrs]
+	pidWhitelister *whitelister.PIDWhitelister
 }
 
 func PrometheusEndpoint(
@@ -348,6 +350,7 @@ func newReporter(
 		attrHTTPClientRequestSize: attrHTTPClientRequestSize,
 		attrGPUKernelCalls:        attrGPUKernelLaunchCalls,
 		attrGPUMemoryAllocs:       attrGPUMemoryAllocations,
+		pidWhitelister:            whitelister.GetPIDWhitelister(),
 		beylaInfo: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: BeylaBuildInfo,
 			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
@@ -702,6 +705,11 @@ func (r *metricsReporter) observe(span *request.Span) {
 	if r.otelSpanFiltered(span) {
 		return
 	}
+
+	if !r.pidWhitelister.IsWhitelisted(span.Pid) {
+		return
+	}
+
 	t := span.Timings()
 	r.beylaInfo.WithLabelValues(span.Service.SDKLanguage.String()).metric.Set(1.0)
 	if r.cfg.SpanMetricsEnabled() || r.cfg.ServiceGraphMetricsEnabled() {
