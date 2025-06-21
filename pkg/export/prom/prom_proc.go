@@ -11,9 +11,11 @@ import (
 	attr2 "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/export/expire"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
+	"github.com/grafana/beyla/v2/pkg/export/whitelister"
 	"github.com/grafana/beyla/v2/pkg/internal/connector"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
 	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
 )
@@ -93,6 +95,8 @@ type procMetricsReporter struct {
 	diskObserver    func(*process.Status)
 	netObserver     func(*process.Status)
 	procStatusInput <-chan []*process.Status
+
+	pidWhitelister *whitelister.PIDWhitelister
 }
 
 func newProcReporter(ctxInfo *global.ContextInfo, cfg *ProcPrometheusConfig, input *msg.Queue[[]*process.Status]) (*procMetricsReporter, error) {
@@ -156,6 +160,7 @@ func newProcReporter(ctxInfo *global.ContextInfo, cfg *ProcPrometheusConfig, inp
 			Help: "Network bytes transferred",
 		}, netLblNames).MetricVec, clock.Time, cfg.Metrics.TTL),
 		procStatusInput: input.Subscribe(),
+		pidWhitelister:  whitelister.GetPIDWhitelister(),
 	}
 
 	if cpuTimeHasState {
@@ -213,6 +218,16 @@ func (r *procMetricsReporter) collectMetrics(_ context.Context) {
 }
 
 func (r *procMetricsReporter) observeMetric(proc *process.Status) {
+	if !r.pidWhitelister.IsWhitelisted(
+		// Use a combination to unique identify the process.
+		request.PidInfo{
+			HostPID:   uint32(proc.ID.ParentProcessID),
+			UserPID:   uint32(proc.ID.ProcessID),
+			Namespace: uint32(proc.ID.StartTime),
+		}) {
+		return
+	}
+
 	r.cpuTimeObserver(proc)
 	r.cpuUtilizationObserver(proc)
 	r.memory.WithLabelValues(labelValues(proc, r.memoryAttrs)...).
