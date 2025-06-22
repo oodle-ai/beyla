@@ -186,6 +186,11 @@ func (s *Span) InternalSignal() bool {
 type SpanAttributes map[string]string
 
 func spanAttributes(s *Span) SpanAttributes {
+	statement := s.Statement
+	if !utf8.ValidString(statement) {
+		statement = ""
+	}
+
 	switch s.Type {
 	case EventTypeHTTP:
 		return SpanAttributes{
@@ -228,14 +233,14 @@ func spanAttributes(s *Span) SpanAttributes {
 			"serverPort": strconv.Itoa(s.HostPort),
 			"operation":  s.Method,
 			"table":      s.Path,
-			"statement":  s.Statement,
+			"statement":  statement,
 		}
 	case EventTypeRedisServer:
 		return SpanAttributes{
 			"serverAddr": SpanHost(s),
 			"serverPort": strconv.Itoa(s.HostPort),
 			"operation":  s.Method,
-			"statement":  s.Statement,
+			"statement":  statement,
 			"query":      s.Path,
 		}
 	case EventTypeKafkaServer:
@@ -553,6 +558,10 @@ func (s *Span) DBSystemName() attribute.KeyValue {
 }
 
 func (s *Span) HasOriginalHost() bool {
+	if !utf8.ValidString(s.Statement) {
+		return false
+	}
+
 	schemeHost := strings.Split(s.Statement, SchemeHostSeparator)
 	return len(schemeHost) > 1 && schemeHost[1] != ""
 }

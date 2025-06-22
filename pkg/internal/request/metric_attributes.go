@@ -2,6 +2,7 @@ package request
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	"go.opentelemetry.io/otel/attribute"
 
@@ -122,7 +123,7 @@ func SpanPeer(span *Span) string {
 }
 
 func HTTPClientHost(span *Span) string {
-	if strings.Index(span.Statement, SchemeHostSeparator) > 0 {
+	if utf8.ValidString(span.Statement) && strings.Index(span.Statement, SchemeHostSeparator) > 0 {
 		schemeHost := strings.Split(span.Statement, SchemeHostSeparator)
 		if schemeHost[1] != "" {
 			return schemeHost[1]
@@ -133,7 +134,7 @@ func HTTPClientHost(span *Span) string {
 }
 
 func HTTPScheme(span *Span) string {
-	if strings.Index(span.Statement, SchemeHostSeparator) > 0 {
+	if utf8.ValidString(span.Statement) && strings.Index(span.Statement, SchemeHostSeparator) > 0 {
 		schemeHost := strings.Split(span.Statement, SchemeHostSeparator)
 		return schemeHost[0]
 	}
