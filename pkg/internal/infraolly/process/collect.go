@@ -121,7 +121,8 @@ func (ps *Collector) Collect(pids map[int32]*svc.Attrs) ([]*Status, []int32) {
 	// remove processes from cache that haven't been collected in this iteration
 	// (this means they already disappeared so there is no need for caching)
 	for ps.cache.Len() > len(results) {
-		ps.cache.RemoveOldest()
+		oldestKey, _, _ := ps.cache.RemoveOldest()
+		removed = append(removed, oldestKey)
 	}
 
 	return results, removed

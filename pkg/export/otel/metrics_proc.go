@@ -186,6 +186,12 @@ func newProcMetricsExporter(
 			llog.Debug("evicting metrics reporter from cache")
 			v.value.cleanupAllMetricsInstances()
 			go func() {
+				defer func() {
+					if err := v.value.provider.Shutdown(ctx); err != nil {
+						llog.Warn("error shutting down metrics provider", "error", err)
+					}
+				}()
+
 				if err := v.value.provider.ForceFlush(ctx); err != nil {
 					llog.Warn("error flushing evicted metrics provider", "error", err)
 				}
@@ -215,6 +221,7 @@ func getFilteredProcessResourceAttrs(hostID string, procID *process.ID, attrSele
 		attr2.ProcCommandArgs.OTEL().StringSlice(procID.CommandArgs),
 		attr2.ProcExecName.OTEL().String(procID.ExecName),
 		attr2.ProcExecPath.OTEL().String(procID.ExecPath),
+		attr2.ProcStartTime.OTEL().String(strconv.Itoa(int(procID.StartTime))),
 	}
 	return getFilteredAttributesByPrefix(baseAttrs, attrSelector, procAttrs, []string{"process."})
 }

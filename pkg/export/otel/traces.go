@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	expirable2 "github.com/hashicorp/golang-lru/v2/expirable"
 	"go.opentelemetry.io/collector/component"
@@ -720,7 +721,7 @@ func TraceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 			request.ServerPort(span.HostPort),
 			span.DBSystemName(), // We can distinguish in the future for MySQL, Postgres etc
 		}
-		if _, ok := optionalAttrs[attr.DBQueryText]; ok {
+		if _, ok := optionalAttrs[attr.DBQueryText]; ok && utf8.ValidString(span.Statement) {
 			attrs = append(attrs, request.DBQueryText(span.Statement))
 		}
 		operation := span.Method
@@ -754,8 +755,11 @@ func TraceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 			request.ServerPort(span.HostPort),
 			semconv.MessagingSystemKafka,
 			semconv.MessagingDestinationName(span.Path),
-			semconv.MessagingClientID(span.Statement),
 			operation,
+		}
+
+		if utf8.ValidString(span.Statement) {
+			attrs = append(attrs, semconv.MessagingClientID(span.Statement))
 		}
 	}
 
