@@ -10,6 +10,15 @@ import (
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 )
 
+// normalizeServerPort replaces ephemeral ports (32768-65535) with "ephemeral"
+// to reduce cardinality while preserving well-known service ports
+func normalizeServerPort(port int) string {
+	if port >= 32768 && port <= 65535 {
+		return "ephemeral"
+	}
+	return strconv.Itoa(port)
+}
+
 // SpanOTELGetters returns the attributes.Getter function that returns the
 // OTEL attribute.KeyValue of a given attribute name.
 // nolint:cyclop
@@ -43,7 +52,9 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 			return ServerAddr(HostAsServer(s))
 		}
 	case attr.ServerPort:
-		getter = func(s *Span) attribute.KeyValue { return ServerPort(s.HostPort) }
+		getter = func(s *Span) attribute.KeyValue {
+			return attribute.String(string(attr.ServerPort), normalizeServerPort(s.HostPort))
+		}
 	case attr.RPCMethod:
 		getter = func(s *Span) attribute.KeyValue { return semconv.RPCMethod(s.Path) }
 	case attr.RPCSystem:
@@ -140,7 +151,7 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 			return HostAsServer(s)
 		}
 	case attr.ServerPort:
-		getter = func(s *Span) string { return strconv.Itoa(s.HostPort) }
+		getter = func(s *Span) string { return normalizeServerPort(s.HostPort) }
 	case attr.RPCMethod:
 		getter = func(s *Span) string { return s.Path }
 	case attr.RPCSystem:
