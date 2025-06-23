@@ -1,7 +1,6 @@
 package intern
 
 import (
-	"github.com/grafana/beyla/v2/pkg/flaggy"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -9,6 +8,8 @@ import (
 
 	"github.com/puzpuzpuz/xsync/v3"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/grafana/beyla/v2/pkg/flaggy"
 )
 
 var defaultStringInternerResetInterval = flaggy.GetEnvDurationVar(

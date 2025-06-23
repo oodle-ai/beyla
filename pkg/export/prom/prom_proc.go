@@ -12,9 +12,11 @@ import (
 	attr2 "github.com/grafana/beyla/v2/pkg/export/attributes/names"
 	"github.com/grafana/beyla/v2/pkg/export/expire"
 	"github.com/grafana/beyla/v2/pkg/export/otel"
+	"github.com/grafana/beyla/v2/pkg/export/whitelister"
 	"github.com/grafana/beyla/v2/pkg/internal/connector"
 	"github.com/grafana/beyla/v2/pkg/internal/infraolly/process"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
 // injectable function reference for testing
@@ -90,6 +92,8 @@ type procMetricsReporter struct {
 	// the "*.io.direction" attributes
 	diskObserver func(*process.Status)
 	netObserver  func(*process.Status)
+
+	pidWhitelister *whitelister.PIDWhitelister
 }
 
 func newProcReporter(
@@ -157,6 +161,7 @@ func newProcReporter(
 			Name: attributes.ProcessNetIO.Prom,
 			Help: "Network bytes transferred",
 		}, netLblNames).MetricVec, clock.Time, cfg.Metrics.TTL),
+		pidWhitelister: whitelister.GetPIDWhitelister(),
 	}
 
 	if cpuTimeHasState {
@@ -214,6 +219,16 @@ func (r *procMetricsReporter) collectMetrics(input <-chan []*process.Status) {
 }
 
 func (r *procMetricsReporter) observeMetric(proc *process.Status) {
+	if !r.pidWhitelister.IsWhitelisted(
+		// Use a combination to unique identify the process.
+		request.PidInfo{
+			HostPID:   uint32(proc.ID.ParentProcessID),
+			UserPID:   uint32(proc.ID.ProcessID),
+			Namespace: uint32(proc.ID.StartTime),
+		}) {
+		return
+	}
+
 	r.cpuTimeObserver(proc)
 	r.cpuUtilizationObserver(proc)
 	r.memory.WithLabelValues(labelValues(proc, r.memoryAttrs)...).
