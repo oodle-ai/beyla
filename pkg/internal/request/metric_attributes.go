@@ -118,12 +118,34 @@ func SpanHost(span *Span) string {
 	return span.Host
 }
 
+// SpanPeerName returns the host name from the span. If the host name is not set, it returns "Unresolved Host".
+// This is used instead of SpanHost in metrics to avoid high cardinality of external IPs which are
+// not DNS resolvable.
+func SpanHostName(span *Span) string {
+	if span.HostName != "" {
+		return span.HostName
+	}
+
+	return "Unresolved Host"
+}
+
 func SpanPeer(span *Span) string {
 	if span.PeerName != "" {
 		return span.PeerName
 	}
 
 	return span.Peer
+}
+
+// SpanPeerName returns the peer name from the span. If the peer name is not set, it returns "Unresolved IP".
+// This is used instead of SpanPeer in metrics to avoid high cardinality of external IPs which are
+// not DNS resolvable.
+func SpanPeerName(span *Span) string {
+	if span.PeerName != "" {
+		return span.PeerName
+	}
+
+	return "Unresolved IP"
 }
 
 func HTTPClientHost(span *Span) string {

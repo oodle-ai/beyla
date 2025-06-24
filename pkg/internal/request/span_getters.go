@@ -26,7 +26,7 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	var getter attributes.Getter[*Span, attribute.KeyValue]
 	switch name {
 	case attr.Client:
-		getter = func(s *Span) attribute.KeyValue { return ClientMetric(SpanPeer(s)) }
+		getter = func(s *Span) attribute.KeyValue { return ClientMetric(SpanPeerName(s)) }
 	case attr.ClientNamespace:
 		getter = func(s *Span) attribute.KeyValue {
 			if s.IsClientSpan() {
@@ -62,7 +62,7 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 	case attr.RPCGRPCStatusCode:
 		getter = func(s *Span) attribute.KeyValue { return semconv.RPCGRPCStatusCodeKey.Int(s.Status) }
 	case attr.Server:
-		getter = func(s *Span) attribute.KeyValue { return ServerMetric(SpanHost(s)) }
+		getter = func(s *Span) attribute.KeyValue { return ServerMetric(SpanHostName(s)) }
 	case attr.ServerNamespace:
 		getter = func(s *Span) attribute.KeyValue {
 			if s.IsClientSpan() {

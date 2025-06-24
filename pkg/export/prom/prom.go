@@ -970,17 +970,17 @@ func labelNamesServiceGraph() []string {
 func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 	if span.IsClientSpan() {
 		return []string{
-			request.SpanPeer(span),
+			request.SpanPeerName(span),
 			span.Service.UID.Namespace,
-			request.SpanHost(span),
+			request.SpanHostName(span),
 			span.OtherNamespace,
 			"beyla",
 		}
 	}
 	return []string{
-		request.SpanPeer(span),
+		request.SpanPeerName(span),
 		span.OtherNamespace,
-		request.SpanHost(span),
+		request.SpanHostName(span),
 		span.Service.UID.Namespace,
 		"beyla",
 	}
