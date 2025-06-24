@@ -1,6 +1,7 @@
 package request
 
 import (
+	"net"
 	"strings"
 	"unicode/utf8"
 
@@ -118,7 +119,7 @@ func SpanHost(span *Span) string {
 	return span.Host
 }
 
-// SpanPeerName returns the host name from the span. If the host name is not set, it returns "Unresolved Host".
+// SpanPeerName returns the host name from the span, or "Unresolved Host".
 // This is used instead of SpanHost in metrics to avoid high cardinality of external IPs which are
 // not DNS resolvable.
 func SpanHostName(span *Span) string {
@@ -126,7 +127,16 @@ func SpanHostName(span *Span) string {
 		return span.HostName
 	}
 
-	return "Unresolved Host"
+	if span.Host != "" {
+		ip := net.ParseIP(span.Host)
+		if ip != nil {
+			return "Unresolved Host"
+		}
+
+		return span.Host
+	}
+
+	return ""
 }
 
 func SpanPeer(span *Span) string {
@@ -137,7 +147,7 @@ func SpanPeer(span *Span) string {
 	return span.Peer
 }
 
-// SpanPeerName returns the peer name from the span. If the peer name is not set, it returns "Unresolved IP".
+// SpanPeerName returns the peer name from the span, or "Unresolved IP".
 // This is used instead of SpanPeer in metrics to avoid high cardinality of external IPs which are
 // not DNS resolvable.
 func SpanPeerName(span *Span) string {
@@ -145,7 +155,16 @@ func SpanPeerName(span *Span) string {
 		return span.PeerName
 	}
 
-	return "Unresolved IP"
+	if span.Peer != "" {
+		ip := net.ParseIP(span.Peer)
+		if ip != nil {
+			return "Unresolved IP"
+		}
+
+		return span.Peer
+	}
+
+	return ""
 }
 
 func HTTPClientHost(span *Span) string {
