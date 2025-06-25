@@ -1,12 +1,21 @@
 package request
 
 import (
+	"net"
 	"strings"
 	"unicode/utf8"
 
 	"go.opentelemetry.io/otel/attribute"
 
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	"github.com/grafana/beyla/v2/pkg/flaggy"
+)
+
+var metricsAllowUnresolvedIP = flaggy.GetEnvBoolVar(
+	"METRICS_ALLOW_UNRESOLVED_IP",
+	"metrics_allow_unresolved_ip",
+	"Allow unresolved IP in metrics",
+	false,
 )
 
 func HTTPRequestMethod(val string) attribute.KeyValue {
@@ -118,12 +127,60 @@ func SpanHost(span *Span) string {
 	return span.Host
 }
 
+// SpanHostName returns the host name from the span, or "Unresolved Host".
+// This is used instead of SpanHost in metrics to avoid high cardinality of external IPs which are
+// not DNS resolvable.
+func SpanHostName(span *Span) string {
+	if span.HostName != "" {
+		return span.HostName
+	}
+
+	if *metricsAllowUnresolvedIP {
+		return span.Host
+	}
+
+	if span.Host != "" {
+		ip := net.ParseIP(span.Host)
+		if ip != nil {
+			return "Unresolved Host"
+		}
+
+		return span.Host
+	}
+
+	return ""
+}
+
 func SpanPeer(span *Span) string {
 	if span.PeerName != "" {
 		return span.PeerName
 	}
 
 	return span.Peer
+}
+
+// SpanPeerName returns the peer name from the span, or "Unresolved IP".
+// This is used instead of SpanPeer in metrics to avoid high cardinality of external IPs which are
+// not DNS resolvable.
+func SpanPeerName(span *Span) string {
+	if span.PeerName != "" {
+		return span.PeerName
+	}
+
+	if *metricsAllowUnresolvedIP {
+		return span.Peer
+	}
+
+	if span.Peer != "" {
+		ip := net.ParseIP(span.Peer)
+		if ip != nil {
+			return "Unresolved IP"
+		}
+
+		return span.Peer
+	}
+
+	return ""
 }
 
 func HTTPClientHost(span *Span) string {
