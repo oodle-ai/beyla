@@ -8,6 +8,14 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	attr "github.com/grafana/beyla/v2/pkg/export/attributes/names"
+	"github.com/grafana/beyla/v2/pkg/flaggy"
+)
+
+var metricsAllowUnresolvedIP = flaggy.GetEnvBoolVar(
+	"METRICS_ALLOW_UNRESOLVED_IP",
+	"metrics_allow_unresolved_ip",
+	"Allow unresolved IP in metrics",
+	false,
 )
 
 func HTTPRequestMethod(val string) attribute.KeyValue {
@@ -127,6 +135,10 @@ func SpanHostName(span *Span) string {
 		return span.HostName
 	}
 
+	if *metricsAllowUnresolvedIP {
+		return span.Host
+	}
+
 	if span.Host != "" {
 		ip := net.ParseIP(span.Host)
 		if ip != nil {
@@ -153,6 +165,10 @@ func SpanPeer(span *Span) string {
 func SpanPeerName(span *Span) string {
 	if span.PeerName != "" {
 		return span.PeerName
+	}
+
+	if *metricsAllowUnresolvedIP {
+		return span.Peer
 	}
 
 	if span.Peer != "" {
