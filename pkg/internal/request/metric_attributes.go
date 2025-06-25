@@ -127,7 +127,7 @@ func SpanHost(span *Span) string {
 	return span.Host
 }
 
-// SpanPeerName returns the host name from the span, or "Unresolved Host".
+// SpanHostName returns the host name from the span, or "Unresolved Host".
 // This is used instead of SpanHost in metrics to avoid high cardinality of external IPs which are
 // not DNS resolvable.
 func SpanHostName(span *Span) string {
