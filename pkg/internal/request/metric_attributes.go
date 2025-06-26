@@ -127,28 +127,34 @@ func SpanHost(span *Span) string {
 	return span.Host
 }
 
+// replace IP address with fixed replacement string to reduce
+// cardinality.
+func handleUnresolvedIP(addr string, replacement string) string {
+	if *metricsAllowUnresolvedIP {
+		return addr
+	}
+
+	if addr == "" {
+		return ""
+	}
+
+	ip := net.ParseIP(addr)
+	if ip != nil {
+		return replacement
+	}
+
+	return addr
+}
+
 // SpanHostName returns the host name from the span, or "Unresolved Host".
 // This is used instead of SpanHost in metrics to avoid high cardinality of external IPs which are
 // not DNS resolvable.
 func SpanHostName(span *Span) string {
 	if span.HostName != "" {
-		return span.HostName
+		return handleUnresolvedIP(span.HostName, "Unresolved Host")
 	}
 
-	if *metricsAllowUnresolvedIP {
-		return span.Host
-	}
-
-	if span.Host != "" {
-		ip := net.ParseIP(span.Host)
-		if ip != nil {
-			return "Unresolved Host"
-		}
-
-		return span.Host
-	}
-
-	return ""
+	return handleUnresolvedIP(span.Host, "Unresolved Host")
 }
 
 func SpanPeer(span *Span) string {
@@ -164,23 +170,10 @@ func SpanPeer(span *Span) string {
 // not DNS resolvable.
 func SpanPeerName(span *Span) string {
 	if span.PeerName != "" {
-		return span.PeerName
+		return handleUnresolvedIP(span.PeerName, "Unresolved IP")
 	}
 
-	if *metricsAllowUnresolvedIP {
-		return span.Peer
-	}
-
-	if span.Peer != "" {
-		ip := net.ParseIP(span.Peer)
-		if ip != nil {
-			return "Unresolved IP"
-		}
-
-		return span.Peer
-	}
-
-	return ""
+	return handleUnresolvedIP(span.Peer, "Unresolved IP")
 }
 
 func HTTPClientHost(span *Span) string {
