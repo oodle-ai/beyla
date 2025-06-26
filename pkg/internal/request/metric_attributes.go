@@ -18,6 +18,11 @@ var metricsAllowUnresolvedIP = flaggy.GetEnvBoolVar(
 	false,
 )
 
+const (
+	unresolvedHost = "Unresolved Host"
+	unresolvedIP   = "Unresolved IP"
+)
+
 func HTTPRequestMethod(val string) attribute.KeyValue {
 	return attribute.Key(attr.HTTPRequestMethod).String(val)
 }
@@ -151,10 +156,10 @@ func handleUnresolvedIP(addr string, replacement string) string {
 // not DNS resolvable.
 func SpanHostName(span *Span) string {
 	if span.HostName != "" {
-		return handleUnresolvedIP(span.HostName, "Unresolved Host")
+		return handleUnresolvedIP(span.HostName, unresolvedHost)
 	}
 
-	return handleUnresolvedIP(span.Host, "Unresolved Host")
+	return handleUnresolvedIP(span.Host, unresolvedHost)
 }
 
 func SpanPeer(span *Span) string {
@@ -170,10 +175,10 @@ func SpanPeer(span *Span) string {
 // not DNS resolvable.
 func SpanPeerName(span *Span) string {
 	if span.PeerName != "" {
-		return handleUnresolvedIP(span.PeerName, "Unresolved IP")
+		return handleUnresolvedIP(span.PeerName, unresolvedIP)
 	}
 
-	return handleUnresolvedIP(span.Peer, "Unresolved IP")
+	return handleUnresolvedIP(span.Peer, unresolvedIP)
 }
 
 func HTTPClientHost(span *Span) string {
