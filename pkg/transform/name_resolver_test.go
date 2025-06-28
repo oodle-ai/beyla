@@ -15,19 +15,107 @@ import (
 )
 
 func TestSuffixPrefix(t *testing.T) {
-	assert.Equal(t, "super", trimSuffixIgnoreCase("superDuper", "DUPER"))
-	assert.Equal(t, "superDup", trimSuffixIgnoreCase("superDuper", "ER"))
-	assert.Equal(t, "superDuper", trimSuffixIgnoreCase("superDuper", "Not matching"))
-	assert.Equal(t, "superDuper", trimSuffixIgnoreCase("superDuper", "SuperDuperDuper"))
-	assert.Equal(t, "", trimSuffixIgnoreCase("superDuper", "SuperDuper"))
-	assert.Equal(t, "superDuper", trimSuffixIgnoreCase("superDuper", ""))
+	suffixTests := []struct {
+		name     string
+		str      string
+		suffix   string
+		expected string
+	}{
+		{
+			name:     "match case insensitive suffix",
+			str:      "superDuper",
+			suffix:   "DUPER",
+			expected: "super",
+		},
+		{
+			name:     "match partial suffix",
+			str:      "superDuper",
+			suffix:   "ER",
+			expected: "superDup",
+		},
+		{
+			name:     "no match",
+			str:      "superDuper",
+			suffix:   "Not matching",
+			expected: "superDuper",
+		},
+		{
+			name:     "suffix longer than string",
+			str:      "superDuper",
+			suffix:   "SuperDuperDuper",
+			expected: "superDuper",
+		},
+		{
+			name:     "exact match",
+			str:      "superDuper",
+			suffix:   "SuperDuper",
+			expected: "",
+		},
+		{
+			name:     "empty suffix",
+			str:      "superDuper",
+			suffix:   "",
+			expected: "superDuper",
+		},
+	}
 
-	assert.Equal(t, "super", trimPrefixIgnoreCase("Dupersuper", "DUPER"))
-	assert.Equal(t, "super", trimPrefixIgnoreCase("Ersuper", "ER"))
-	assert.Equal(t, "superDuper", trimPrefixIgnoreCase("superDuper", "Not matching"))
-	assert.Equal(t, "superDuper", trimPrefixIgnoreCase("superDuper", "SuperDuperDuper"))
-	assert.Equal(t, "", trimPrefixIgnoreCase("superDuper", "SuperDuper"))
-	assert.Equal(t, "superDuper", trimPrefixIgnoreCase("superDuper", ""))
+	for _, tt := range suffixTests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, _ := trimSuffixIgnoreCase(tt.str, tt.suffix)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+
+	prefixTests := []struct {
+		name     string
+		str      string
+		prefix   string
+		expected string
+	}{
+		{
+			name:     "match case insensitive prefix",
+			str:      "Dupersuper",
+			prefix:   "DUPER",
+			expected: "super",
+		},
+		{
+			name:     "match partial prefix",
+			str:      "Ersuper",
+			prefix:   "ER",
+			expected: "super",
+		},
+		{
+			name:     "no match",
+			str:      "superDuper",
+			prefix:   "Not matching",
+			expected: "superDuper",
+		},
+		{
+			name:     "prefix longer than string",
+			str:      "superDuper",
+			prefix:   "SuperDuperDuper",
+			expected: "superDuper",
+		},
+		{
+			name:     "exact match",
+			str:      "superDuper",
+			prefix:   "SuperDuper",
+			expected: "",
+		},
+		{
+			name:     "empty prefix",
+			str:      "superDuper",
+			prefix:   "",
+			expected: "superDuper",
+		},
+	}
+
+	for _, tt := range prefixTests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, _ := trimPrefixIgnoreCase(tt.str, tt.prefix)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }
 
 func TestResolvePodsFromK8s(t *testing.T) {
@@ -186,12 +274,64 @@ func TestCleanName(t *testing.T) {
 
 	nr := NameResolver{}
 
-	assert.Equal(t, "service", nr.cleanName(&s, "127.0.0.1", "127-0-0-1.service"))
-	assert.Equal(t, "1.service", nr.cleanName(&s, "127.0.0.1", "1.service"))
-	assert.Equal(t, "service", nr.cleanName(&s, "127.0.0.1", "service."))
-	assert.Equal(t, "service", nr.cleanName(&s, "127.0.0.1", "service.svc.cluster.local."))
-	assert.Equal(t, "service", nr.cleanName(&s, "127.0.0.1", "service.special.namespace.svc.cluster.local."))
-	assert.Equal(t, "service", nr.cleanName(&s, "127.0.0.1", "service.k8snamespace.svc.cluster.local."))
+	tests := []struct {
+		name     string
+		ip       string
+		hostname string
+		wantName string
+		wantNS   string
+	}{
+		{
+			name:     "ip-based hostname",
+			ip:       "127.0.0.1",
+			hostname: "127-0-0-1.service",
+			wantName: "service",
+			wantNS:   "special.namespace",
+		},
+		{
+			name:     "hostname with number prefix",
+			ip:       "127.0.0.1",
+			hostname: "1.service",
+			wantName: "1.service",
+			wantNS:   "",
+		},
+		{
+			name:     "hostname with trailing dot",
+			ip:       "127.0.0.1",
+			hostname: "service.",
+			wantName: "service",
+			wantNS:   "",
+		},
+		{
+			name:     "hostname with cluster suffix",
+			ip:       "127.0.0.1",
+			hostname: "service.svc.cluster.local.",
+			wantName: "service",
+			wantNS:   "special.namespace",
+		},
+		{
+			name:     "hostname with namespace and cluster suffix",
+			ip:       "127.0.0.1",
+			hostname: "service.special.namespace.svc.cluster.local.",
+			wantName: "service",
+			wantNS:   "special.namespace",
+		},
+		{
+			name:     "hostname with k8s namespace and cluster suffix",
+			ip:       "127.0.0.1",
+			hostname: "service.k8snamespace.svc.cluster.local.",
+			wantName: "service",
+			wantNS:   "k8snamespace",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotName, gotNS := nr.cleanName(&s, tt.ip, tt.hostname)
+			assert.Equal(t, tt.wantName, gotName)
+			assert.Equal(t, tt.wantNS, gotNS)
+		})
+	}
 }
 
 func TestResolveNodesFromK8s(t *testing.T) {
