@@ -109,18 +109,18 @@ func nameResolver(ctx context.Context, ctxInfo *global.ContextInfo, cfg *NameRes
 	}, nil
 }
 
-func trimSuffixIgnoreCase(s, suffix string) string {
+func trimSuffixIgnoreCase(s, suffix string) (string, bool) {
 	if len(s) >= len(suffix) && strings.EqualFold(s[len(s)-len(suffix):], suffix) {
-		return s[:len(s)-len(suffix)]
+		return s[:len(s)-len(suffix)], true
 	}
-	return s
+	return s, false
 }
 
-func trimPrefixIgnoreCase(s, prefix string) string {
+func trimPrefixIgnoreCase(s, prefix string) (string, bool) {
 	if len(s) >= len(prefix) && strings.EqualFold(s[0:len(prefix)], prefix) {
-		return s[len(prefix):]
+		return s[len(prefix):], true
 	}
-	return s
+	return s, false
 }
 
 func (nr *NameResolver) resolveNames(span *request.Span) {
@@ -161,20 +161,34 @@ func (nr *NameResolver) resolve(svc *svc.Attrs, ip string) (string, string) {
 	return name, ns
 }
 
-func (nr *NameResolver) cleanName(svc *svc.Attrs, ip, n string) string {
+func (nr *NameResolver) cleanName(svc *svc.Attrs, ip, n string) (string, string) {
+	ns := ""
+	trimmed := false
 	n = strings.TrimSuffix(n, ".")
-	n = trimSuffixIgnoreCase(n, ".svc.cluster.local")
-	n = trimSuffixIgnoreCase(n, "."+svc.UID.Namespace)
+	n, trimmed = trimSuffixIgnoreCase(n, ".svc.cluster.local")
+	if trimmed {
+		ns = svc.UID.Namespace
+	}
+	n, trimmed = trimSuffixIgnoreCase(n, "."+svc.UID.Namespace)
+	if trimmed {
+		ns = svc.UID.Namespace
+	}
 
 	kubeNamespace, ok := svc.Metadata[attr.K8sNamespaceName]
 	if ok && kubeNamespace != "" && kubeNamespace != svc.UID.Namespace {
-		n = trimSuffixIgnoreCase(n, "."+kubeNamespace)
+		n, trimmed = trimSuffixIgnoreCase(n, "."+kubeNamespace)
+		if trimmed {
+			ns = kubeNamespace
+		}
 	}
 
 	dashIP := strings.ReplaceAll(ip, ".", "-") + "."
-	n = trimPrefixIgnoreCase(n, dashIP)
+	n, trimmed = trimPrefixIgnoreCase(n, dashIP)
+	if trimmed {
+		ns = svc.UID.Namespace
+	}
 
-	return n
+	return n, ns
 }
 
 func (nr *NameResolver) dnsResolve(svc *svc.Attrs, ip string) (string, string) {
@@ -197,10 +211,10 @@ func (nr *NameResolver) dnsResolve(svc *svc.Attrs, ip string) (string, string) {
 	if nr.sources.Has(ResolverDNS) {
 		n := nr.resolveIP(ip)
 		if n == ip {
-			return n, svc.UID.Namespace
+			return n, ""
 		}
-		n = nr.cleanName(svc, ip, n)
-		return n, svc.UID.Namespace
+		n, ns := nr.cleanName(svc, ip, n)
+		return n, ns
 	}
 	return "", ""
 }
