@@ -133,21 +133,38 @@ func SpanHost(span *Span) string {
 }
 
 // replace IP address with fixed replacement string to reduce
-// cardinality.
-func handleUnresolvedIP(addr string, replacement string) string {
-	if *metricsAllowUnresolvedIP {
-		return addr
-	}
-
+// cardinality. Also maps known domains to generic service names.
+func handleUnresolvedIPAndExternalHosts(addr string, replacement string) string {
 	if addr == "" {
 		return ""
 	}
 
+	// Check if it's an IP address first
 	ip := net.ParseIP(addr)
 	if ip != nil {
+		// Handle IP addresses based on METRICS_ALLOW_UNRESOLVED_IP flag only
+		if *metricsAllowUnresolvedIP {
+			return addr
+		}
 		return replacement
 	}
 
+	hm := GetHostnameMapping()
+	if !hm.Enabled {
+		return addr
+	}
+
+	// For domain names, try to map to cloud provider service names using active configuration
+	mappedDomain := mapHostnameWithConfig(addr, hm)
+	if mappedDomain != addr {
+		return mappedDomain
+	}
+
+	// Default to last 2 parts of hostname to reduce cardinality
+	parts := strings.Split(addr, ".")
+	if len(parts) > 2 {
+		return strings.Join(parts[len(parts)-2:], ".")
+	}
 	return addr
 }
 
@@ -156,10 +173,10 @@ func handleUnresolvedIP(addr string, replacement string) string {
 // not DNS resolvable.
 func SpanHostName(span *Span) string {
 	if span.HostName != "" {
-		return handleUnresolvedIP(span.HostName, unresolvedHost)
+		return handleUnresolvedIPAndExternalHosts(span.HostName, unresolvedHost)
 	}
 
-	return handleUnresolvedIP(span.Host, unresolvedHost)
+	return handleUnresolvedIPAndExternalHosts(span.Host, unresolvedHost)
 }
 
 func SpanPeer(span *Span) string {
@@ -175,10 +192,10 @@ func SpanPeer(span *Span) string {
 // not DNS resolvable.
 func SpanPeerName(span *Span) string {
 	if span.PeerName != "" {
-		return handleUnresolvedIP(span.PeerName, unresolvedIP)
+		return handleUnresolvedIPAndExternalHosts(span.PeerName, unresolvedIP)
 	}
 
-	return handleUnresolvedIP(span.Peer, unresolvedIP)
+	return handleUnresolvedIPAndExternalHosts(span.Peer, unresolvedIP)
 }
 
 func HTTPClientHost(span *Span) string {
