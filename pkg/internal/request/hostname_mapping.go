@@ -26,7 +26,7 @@ type HostnameMapping struct {
 
 // Default hostname mapping - can be overridden by configuration
 var hostnameMapping = HostnameMapping{
-	Enabled:  false,
+	Enabled: false,
 }
 
 // compilePatterns compiles all regex patterns in the mapping
@@ -70,6 +70,12 @@ func mapHostnameWithConfig(hostname string, mapping *HostnameMapping) string {
 			// Return the default service name for this domain
 			return config.ServiceName
 		}
+	}
+
+	// Default to last 2 parts of hostname to reduce cardinality
+	parts := strings.Split(hostname, ".")
+	if len(parts) > 2 {
+		return strings.Join(parts[len(parts)-2:], ".")
 	}
 
 	return hostname

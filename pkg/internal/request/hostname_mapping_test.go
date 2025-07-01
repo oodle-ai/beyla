@@ -216,12 +216,12 @@ func TestHostnameMappingBehavior(t *testing.T) {
 		{
 			name:     "Unknown service returns original hostname",
 			hostname: "api.example.com",
-			expected: "api.example.com",
+			expected: "example.com",
 		},
 		{
 			name:     "Regular domain returns original",
 			hostname: "www.github.com",
-			expected: "www.github.com",
+			expected: "github.com",
 		},
 
 		// Case sensitivity tests

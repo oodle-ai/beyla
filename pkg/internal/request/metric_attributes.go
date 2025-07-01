@@ -154,18 +154,8 @@ func handleUnresolvedIPAndExternalHosts(addr string, replacement string) string 
 		return addr
 	}
 
-	// For domain names, try to map to cloud provider service names using active configuration
-	mappedDomain := mapHostnameWithConfig(addr, hm)
-	if mappedDomain != addr {
-		return mappedDomain
-	}
-
-	// Default to last 2 parts of hostname to reduce cardinality
-	parts := strings.Split(addr, ".")
-	if len(parts) > 2 {
-		return strings.Join(parts[len(parts)-2:], ".")
-	}
-	return addr
+	// For domain names, try to map to hostname to domain names
+	return mapHostnameWithConfig(addr, hm)
 }
 
 // SpanHostName returns the host name from the span, or "Unresolved Host".
