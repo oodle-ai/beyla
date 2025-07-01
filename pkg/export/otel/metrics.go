@@ -123,6 +123,10 @@ type MetricsConfig struct {
 
 	AllowServiceGraphSelfReferences bool `yaml:"allow_service_graph_self_references" env:"BEYLA_OTEL_ALLOW_SERVICE_GRAPH_SELF_REFERENCES"`
 
+	// HostnameMapping allows configuring custom hostname to service name mappings for cardinality reduction
+	// This can be used to group multiple hostnames under a single service name (e.g., AWS services)
+	HostnameMapping *request.HostnameMapping `yaml:"hostname_mapping"`
+
 	// Grafana configuration needs to be explicitly set up before building the graph
 	Grafana *GrafanaOTLP `yaml:"-"`
 }
@@ -390,12 +394,20 @@ func newMetricsReporter(
 						llog.Warn("error shutting down metrics provider", "error", err)
 					}
 				}()
-			
+
 				if err := v.value.provider.ForceFlush(ctx); err != nil {
 					llog.Warn("error flushing evicted metrics provider", "error", err)
 				}
 			}()
 		}, mr.newMetricSet)
+
+	// Initialize hostname mapping if configured
+	if cfg.HostnameMapping != nil && cfg.HostnameMapping.Enabled {
+		if err := request.SetHostnameMapping(cfg.HostnameMapping); err != nil {
+			return nil, fmt.Errorf("failed to set hostname mapping: %w", err)
+		}
+	}
+
 	// Instantiate the OTLP HTTP or GRPC metrics exporter
 	exporter, err := InstantiateMetricsExporter(ctx, cfg, log)
 	if err != nil {

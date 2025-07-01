@@ -130,6 +130,10 @@ type PrometheusConfig struct {
 	// beforehand. For example, to add the OTEL deployment.environment resource attribute as a Prometheus resource attribute,
 	// you should add `deployment.environment`.
 	ExtraResourceLabels []string `yaml:"extra_resource_attributes" env:"BEYLA_PROMETHEUS_EXTRA_RESOURCE_ATTRIBUTES" envSeparator:","`
+
+	// HostnameMapping allows configuring custom hostname to service name mappings for cardinality reduction
+	// This can be used to group multiple hostnames under a single service name (e.g., AWS services)
+	HostnameMapping *request.HostnameMapping `yaml:"hostname_mapping"`
 }
 
 func mlog() *slog.Logger {
@@ -347,6 +351,14 @@ func newReporter(
 	// If service name is not explicitly set, we take the service name as set by the
 	// executable inspector
 	extraMetadataLabels := parseExtraMetadata(cfg.ExtraResourceLabels)
+
+	// Initialize hostname mapping if configured
+	if cfg.HostnameMapping != nil && cfg.HostnameMapping.Enabled {
+		if err := request.SetHostnameMapping(cfg.HostnameMapping); err != nil {
+			return nil, fmt.Errorf("failed to set hostname mapping: %w", err)
+		}
+	}
+
 	mr := &metricsReporter{
 		input:                      input.Subscribe(),
 		processEvents:              processEventCh.Subscribe(),
@@ -645,13 +657,13 @@ func newReporter(
 		}
 	}
 
+	registeredMetrics = append(registeredMetrics, mr.tracesTargetInfo)
 	if cfg.SpanMetricsEnabled() {
 		registeredMetrics = append(registeredMetrics,
 			mr.spanMetricsLatency,
 			mr.spanMetricsCallsTotal,
 			mr.spanMetricsRequestSizeTotal,
 			mr.spanMetricsResponseSizeTotal,
-			mr.tracesTargetInfo,
 		)
 	}
 
