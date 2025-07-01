@@ -657,13 +657,13 @@ func newReporter(
 		}
 	}
 
+	registeredMetrics = append(registeredMetrics, mr.tracesTargetInfo)
 	if cfg.SpanMetricsEnabled() {
 		registeredMetrics = append(registeredMetrics,
 			mr.spanMetricsLatency,
 			mr.spanMetricsCallsTotal,
 			mr.spanMetricsRequestSizeTotal,
 			mr.spanMetricsResponseSizeTotal,
-			mr.tracesTargetInfo,
 		)
 	}
 
