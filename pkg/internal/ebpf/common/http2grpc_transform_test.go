@@ -123,7 +123,8 @@ func TestHTTP2Parsing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			framer := byteFramer(tt.input[:tt.inputLen])
+			framer, fwr := getFramer(tt.input[:tt.inputLen])
+			defer putFramer(fwr)
 			for {
 				f, err := framer.ReadFrame()
 
