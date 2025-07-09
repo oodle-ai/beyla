@@ -362,6 +362,9 @@ github.com/munnerz/goautoneg
 # github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f
 ## explicit
 github.com/mxk/go-flowrate/flowrate
+# github.com/oodle-ai/safepool v0.0.0-20241015064530-ac95a6e8cc1b
+## explicit; go 1.22.4
+github.com/oodle-ai/safepool
 # github.com/pelletier/go-toml/v2 v2.0.8
 ## explicit; go 1.16
 github.com/pelletier/go-toml/v2

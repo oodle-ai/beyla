@@ -9,6 +9,7 @@ import (
 	"unsafe"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/oodle-ai/safepool"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/http2"
 
@@ -46,6 +47,45 @@ func byteFramer(data []uint8) *http2.Framer {
 	fr := http2.NewFramer(buf, buf) // the write is same as read, but we never write
 
 	return fr
+}
+
+// resettableReader wraps a bytes.Buffer to implement io.Reader that can be reset with new data
+type resettableReader struct {
+	*bytes.Buffer
+}
+
+func (r *resettableReader) resetWithData(data []uint8) {
+	r.Buffer.Reset()
+	r.Buffer.Write(data)
+}
+
+// framerWithReader pairs a framer with its resettable reader
+type framerWithReader struct {
+	framer *http2.Framer
+	reader *resettableReader
+}
+
+var (
+	framerPool = safepool.NewPoolWithConstructor[framerWithReader](func() interface{} {
+		reader := &resettableReader{Buffer: &bytes.Buffer{}}
+		fr := http2.NewFramer(reader, reader) // Use reader as both reader and writer
+		fr.SetReuseFrames()                   // Enable frame reuse within the framer
+		return &framerWithReader{
+			framer: fr,
+			reader: reader,
+		}
+	})
+)
+
+func getFramer(data []uint8) (*http2.Framer, *framerWithReader) {
+	fwr := framerPool.Get()
+	fwr.reader.resetWithData(data)
+	return fwr.framer, fwr
+}
+
+func putFramer(fwr *framerWithReader) {
+	fwr.reader.Reset() // Clear the buffer
+	framerPool.Put(fwr)
 }
 
 func getOrInitH2Conn(connID uint64) *h2Connection {
@@ -503,7 +543,8 @@ func isHTTP2(data []uint8, eventLen int) bool {
 		return false
 	}
 
-	framer := byteFramer(data)
+	framer, fwr := getFramer(data)
+	defer putFramer(fwr)
 
 	for {
 		f, err := framer.ReadFrame()
