@@ -820,7 +820,7 @@ func (r *metricsReporter) observe(span *request.Span) {
 					labelValues(span, r.attrGRPCClientDuration)...,
 				).metric.Observe(duration)
 			}
-		case request.EventTypeRedisClient, request.EventTypeSQLClient, request.EventTypeRedisServer:
+		case request.EventTypeRedisClient, request.EventTypeSQLClient, request.EventTypeRedisServer, request.EventTypeMongoClient:
 			if r.is.DBEnabled() {
 				r.dbClientDuration.WithLabelValues(
 					labelValues(span, r.attrDBClientDuration)...,

@@ -333,7 +333,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		config.RetryConfig = getRetrySettings(cfg)
 		config.ClientConfig = confighttp.ClientConfig{
 			Endpoint: opts.Scheme + "://" + opts.Endpoint + opts.BaseURLPath,
-			TLSSetting: configtls.ClientConfig{
+			TLS: configtls.ClientConfig{
 				Insecure:           opts.Insecure,
 				InsecureSkipVerify: cfg.InsecureSkipVerify,
 			},
@@ -387,7 +387,7 @@ func getTracesExporter(ctx context.Context, cfg TracesConfig, ctxInfo *global.Co
 		config.RetryConfig = getRetrySettings(cfg)
 		config.ClientConfig = configgrpc.ClientConfig{
 			Endpoint: endpoint.String(),
-			TLSSetting: configtls.ClientConfig{
+			TLS: configtls.ClientConfig{
 				Insecure:           opts.Insecure,
 				InsecureSkipVerify: cfg.InsecureSkipVerify,
 			},
@@ -548,6 +548,11 @@ func generateTracesWithAttributes(svc *svc.Attrs, envResourceAttrs []attribute.K
 		// Set status code
 		statusCode := codeToStatusCode(request.SpanStatusCode(span))
 		s.Status().SetCode(statusCode)
+
+		statusMessage := request.SpanStatusMessage(span)
+		if statusMessage != "" {
+			s.Status().SetMessage(statusMessage)
+		}
 		s.SetEndTimestamp(pcommon.NewTimestampFromTime(t.End))
 	}
 	return traces
@@ -652,6 +657,8 @@ func acceptSpan(is instrumentations.InstrumentationSelection, span *request.Span
 		return is.RedisEnabled()
 	case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
 		return is.KafkaEnabled()
+	case request.EventTypeMongoClient:
+		return is.MongoEnabled()
 	}
 
 	return false
@@ -659,6 +666,7 @@ func acceptSpan(is instrumentations.InstrumentationSelection, span *request.Span
 
 // TODO use semconv.DBSystemRedis when we update to OTEL semantic conventions library 1.30
 var dbSystemRedis = attribute.String(string(attr.DBSystemName), semconv.DBSystemRedis.Value.AsString())
+var dbSystemMongo = attribute.String(string(attr.DBSystemName), semconv.DBSystemMongoDB.Value.AsString())
 var spanMetricsSkip = attribute.Bool(string(attr.SkipSpanMetrics), true)
 
 // nolint:cyclop
@@ -761,6 +769,25 @@ func TraceAttributes(span *request.Span, optionalAttrs map[attr.Name]struct{}) [
 		if utf8.ValidString(span.Statement) {
 			attrs = append(attrs, semconv.MessagingClientID(span.Statement))
 		}
+	case request.EventTypeMongoClient:
+		attrs = []attribute.KeyValue{
+			request.ServerAddr(request.HostAsServer(span)),
+			request.ServerPort(span.HostPort),
+			dbSystemMongo,
+		}
+		operation := span.Method
+		if operation != "" {
+			attrs = append(attrs, request.DBOperationName(operation))
+		}
+		if span.Path != "" {
+			attrs = append(attrs, request.DBCollectionName(span.Path))
+		}
+		if span.Status == 1 {
+			attrs = append(attrs, request.DBResponseStatusCode(span.DBError.ErrorCode))
+		}
+		if span.DBNamespace != "" {
+			attrs = append(attrs, request.DBNamespace(span.DBNamespace))
+		}
 	}
 
 	if _, ok := optionalAttrs[attr.SkipSpanMetrics]; ok {
@@ -774,7 +801,7 @@ func SpanKind(span *request.Span) trace2.SpanKind {
 	switch span.Type {
 	case request.EventTypeHTTP, request.EventTypeGRPC, request.EventTypeRedisServer, request.EventTypeKafkaServer:
 		return trace2.SpanKindServer
-	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient:
+	case request.EventTypeHTTPClient, request.EventTypeGRPCClient, request.EventTypeSQLClient, request.EventTypeRedisClient, request.EventTypeMongoClient:
 		return trace2.SpanKindClient
 	case request.EventTypeKafkaClient:
 		switch span.Method {

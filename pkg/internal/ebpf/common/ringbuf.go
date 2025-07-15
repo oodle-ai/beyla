@@ -40,11 +40,12 @@ type ringBufForwarder struct {
 	spansLen   int
 	access     sync.Mutex
 	ticker     *time.Ticker
-	reader     func(*config.EBPFTracer, *ringbuf.Record, ServiceFilter) (request.Span, bool, error)
+	reader     func(*EBPFParseContext, *config.EBPFTracer, *ringbuf.Record, ServiceFilter) (request.Span, bool, error)
 	// filter the input spans, eliminating these from processes whose PID
 	// belong to a process that does not match the discovery policies
-	filter  ServiceFilter
-	metrics imetrics.Reporter
+	filter       ServiceFilter
+	metrics      imetrics.Reporter
+	parseContext *EBPFParseContext
 }
 
 var singleRbf *ringBufForwarder
@@ -71,6 +72,7 @@ func SharedRingbuf(
 		cfg: cfg, logger: log, ringbuffer: ringbuffer,
 		closers: nil, reader: ReadBPFTraceAsSpan,
 		filter: filter, metrics: metrics,
+		parseContext: NewEBPFParseContext(cfg),
 	}
 	singleRbf = &rbf
 	return singleRbf.sharedReadAndForward
@@ -80,7 +82,7 @@ func ForwardRingbuf(
 	cfg *config.EBPFTracer,
 	ringbuffer *ebpf.Map,
 	filter ServiceFilter,
-	reader func(*config.EBPFTracer, *ringbuf.Record, ServiceFilter) (request.Span, bool, error),
+	reader func(*EBPFParseContext, *config.EBPFTracer, *ringbuf.Record, ServiceFilter) (request.Span, bool, error),
 	logger *slog.Logger,
 	metrics imetrics.Reporter,
 	closers ...io.Closer,
@@ -89,6 +91,7 @@ func ForwardRingbuf(
 		cfg: cfg, logger: logger, ringbuffer: ringbuffer,
 		closers: closers, reader: reader,
 		filter: filter, metrics: metrics,
+		parseContext: NewEBPFParseContext(cfg),
 	}
 	return rbf.readAndForward
 }
@@ -175,7 +178,7 @@ func (rbf *ringBufForwarder) alreadyForwarded(ctx context.Context, _ []io.Closer
 func (rbf *ringBufForwarder) processAndForward(record ringbuf.Record, spansChan *msg.Queue[[]request.Span]) {
 	rbf.access.Lock()
 	defer rbf.access.Unlock()
-	s, ignore, err := rbf.reader(rbf.cfg, &record, rbf.filter)
+	s, ignore, err := rbf.reader(rbf.parseContext, rbf.cfg, &record, rbf.filter)
 	if err != nil {
 		rbf.logger.Error("error parsing perf event", "error", err)
 		return
