@@ -31,6 +31,7 @@ message PodInfo {
   string host_ip = 4;
   repeated ContainerInfo containers = 5;
   repeated Owner owners = 6;
+  string phase = 7;
 }
 
 message ContainerInfo {

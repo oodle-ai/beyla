@@ -188,6 +188,12 @@ func (nr *NameResolver) cleanName(svc *svc.Attrs, ip, n string) (string, string)
 		ns = svc.UID.Namespace
 	}
 
+	// Handle stateful set DNS, <stateful-set-ordinal>.<stateful-set>
+	parts := strings.Split(n, ".")
+	if len(parts) == 2 {
+		n = parts[1]
+	}
+
 	return n, ns
 }
 

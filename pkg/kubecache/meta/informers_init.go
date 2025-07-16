@@ -370,6 +370,7 @@ func (inf *Informers) podToIndexableEntity(pod *v1.Pod) (interface{}, error) {
 				Containers:   containers,
 				Owners:       ownersFrom(&pod.ObjectMeta),
 				HostIp:       pod.Status.HostIP,
+				Phase:        string(pod.Status.Phase),
 			},
 		},
 	}, nil

@@ -1000,10 +1000,22 @@ func labelNamesServiceGraph(kubeEnabled bool) []string {
 func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 	var values []string
 	if span.IsClientSpan() {
+		peerName := request.SpanPeerName(span)
+		hostName := request.SpanHostName(span)
+		// HACK: Mongo eBPF events have empty peer/host.
+		// For now, we set peer to be service name and host to be static "MongoDB" representing MongoDB cluster.
+		if span.Type == request.EventTypeMongoClient {
+			if peerName == "" {
+				peerName = span.Service.UID.Name
+			}
+			if hostName == "" {
+				hostName = "MongoDB"
+			}
+		}
 		values = []string{
-			request.SpanPeerName(span),
+			peerName,
 			span.Service.UID.Namespace,
-			request.SpanHostName(span),
+			hostName,
 			span.OtherNamespace,
 			"beyla",
 		}

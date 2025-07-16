@@ -590,61 +590,6 @@ func getMongoInfo(request *MongoRequestValue) (*mongoSpanInfo, error) {
 	return spanInfo, nil
 }
 
-func TCPToMongoToSpan(trace *TCPRequestInfo, info *mongoSpanInfo) request.Span {
-	peer := ""
-	peerPort := 0
-	hostname := ""
-	hostPort := 0
-
-	reqType := request.EventTypeMongoClient
-
-	if trace.ConnInfo.S_port != 0 || trace.ConnInfo.D_port != 0 {
-		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&trace.ConnInfo)).reqHostInfo()
-		peerPort = int(trace.ConnInfo.S_port)
-		hostPort = int(trace.ConnInfo.D_port)
-	}
-
-	var dbError request.DBError
-	if !info.Success {
-		dbError = request.DBError{
-			ErrorCode:   strconv.Itoa(info.ErrorCode),
-			Description: info.ErrorCodeName + ": " + info.Error,
-		}
-	}
-
-	var status int
-	if info.Success {
-		status = 0
-	} else {
-		status = 1
-	}
-
-	return request.Span{
-		Type:          reqType,
-		Method:        info.OpName,
-		Path:          info.Collection,
-		Peer:          peer,
-		PeerPort:      peerPort,
-		Host:          hostname,
-		HostPort:      hostPort,
-		ContentLength: int64(trace.ReqLen),
-		RequestStart:  int64(trace.StartMonotimeNs),
-		Start:         int64(trace.StartMonotimeNs),
-		End:           int64(trace.EndMonotimeNs),
-		Status:        status,
-		DBError:       dbError,
-		DBNamespace:   info.DB,
-		TraceID:       trace2.TraceID(trace.Tp.TraceId),
-		SpanID:        trace2.SpanID(trace.Tp.SpanId),
-		ParentSpanID:  trace2.SpanID(trace.Tp.ParentId),
-		Pid: request.PidInfo{
-			HostPID:   trace.Pid.HostPid,
-			UserPID:   trace.Pid.UserPid,
-			Namespace: trace.Pid.Ns,
-		},
-	}
-}
-
 func isHeartbeat(comm string) bool {
 	return comm == commHello || comm == commIsMaster || comm == commPing || comm == commIsWritablePrimary
 }
@@ -710,4 +655,60 @@ func findDoubleInBson(doc bson.D, key string) (float64, bool) {
 		return 0, false
 	}
 	return doubleValue, true
+}
+
+func TCPToMongoToSpan(trace *TCPRequestInfo, info *mongoSpanInfo) request.Span {
+	peer := ""
+	peerPort := 0
+	hostname := ""
+	hostPort := 0
+
+	reqType := request.EventTypeMongoClient
+
+	// Resolve peer/hostname if either ports are non-zero OR addresses are non-empty
+	if trace.ConnInfo.S_port != 0 || trace.ConnInfo.D_port != 0 {
+		peer, hostname = (*BPFConnInfo)(unsafe.Pointer(&trace.ConnInfo)).reqHostInfo()
+		peerPort = int(trace.ConnInfo.S_port)
+		hostPort = int(trace.ConnInfo.D_port)
+	}
+
+	var dbError request.DBError
+	if !info.Success {
+		dbError = request.DBError{
+			ErrorCode:   strconv.Itoa(info.ErrorCode),
+			Description: info.ErrorCodeName + ": " + info.Error,
+		}
+	}
+
+	var status int
+	if info.Success {
+		status = 0
+	} else {
+		status = 1
+	}
+
+	return request.Span{
+		Type:          reqType,
+		Method:        info.OpName,
+		Path:          info.Collection,
+		Peer:          peer,
+		PeerPort:      peerPort,
+		Host:          hostname,
+		HostPort:      hostPort,
+		ContentLength: int64(trace.ReqLen),
+		RequestStart:  int64(trace.StartMonotimeNs),
+		Start:         int64(trace.StartMonotimeNs),
+		End:           int64(trace.EndMonotimeNs),
+		Status:        status,
+		DBError:       dbError,
+		DBNamespace:   info.DB,
+		TraceID:       trace2.TraceID(trace.Tp.TraceId),
+		SpanID:        trace2.SpanID(trace.Tp.SpanId),
+		ParentSpanID:  trace2.SpanID(trace.Tp.ParentId),
+		Pid: request.PidInfo{
+			HostPID:   trace.Pid.HostPid,
+			UserPID:   trace.Pid.UserPid,
+			Namespace: trace.Pid.Ns,
+		},
+	}
 }
