@@ -62,24 +62,14 @@ func ReadTCPRequestIntoSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, 
 	_, _, err = ProcessMongoEvent(b, int64(event.StartMonotimeNs), int64(event.EndMonotimeNs), event.ConnInfo, *parseCtx.mongoRequestCache)
 	if err == nil {
 		mongoRequest, moreToCome, err = ProcessMongoEvent(event.Rbuf[:rl], int64(event.StartMonotimeNs), int64(event.EndMonotimeNs), event.ConnInfo, *parseCtx.mongoRequestCache)
-		//log.Info("Processing mongo event 2", "mongoRequest", mongoRequest, "moreToCome", moreToCome, "err", err)
-		//fmt.Printf("[>] %v\n", b)
-		//fmt.Printf("[<] %v\n", event.Rbuf[:rl])
 	}
 	if err == nil && !moreToCome && mongoRequest != nil {
-		//log.Info("Processing mongo event 3")
 		mongoInfo, err := getMongoInfo(mongoRequest)
-		//log.Info("Processing mongo event 4", "mongoInfo", mongoInfo, "err", err)
 		if err == nil {
-			//log.Info("Transforming mongo event to span")
 			mongoSpan := TCPToMongoToSpan(event, mongoInfo)
-			//log.Info("Mongo span", "mongoSpan", mongoSpan)
 			return mongoSpan, false, nil
 		}
 	}
-	//if err != nil && !strings.Contains(err.Error(), "invalid MongoDB request ID") && !strings.Contains(err.Error(), "invalid MongoDB response ID") && !strings.Contains(err.Error(), "no in-flight MongoDB request found for key") {
-	//	log.Error("Error processing mongo event", "error", err)
-	//}
 
 	switch {
 	case isRedis(b) && isRedis(event.Rbuf[:rl]):
