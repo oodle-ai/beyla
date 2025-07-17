@@ -650,6 +650,54 @@ func TestGenerateTracesAttributes(t *testing.T) {
 		ensureTraceStrAttr(t, attrs, semconv.MessagingClientIDKey, "test")
 
 	})
+	t.Run("test Mongo trace generation", func(t *testing.T) {
+		span := request.Span{Type: request.EventTypeMongoClient, Method: "insert", Path: "mycollection", DBNamespace: "mydatabase", Status: 0}
+		tAttrs := TraceAttributes(&span, map[attr.Name]struct{}{"db.operation.name": {}})
+		traces := GenerateTraces(&span.Service, []attribute.KeyValue{}, "host-id", groupFromSpanAndAttributes(&span, tAttrs))
+
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+
+		assert.NotEmpty(t, spans.At(0).SpanID().String())
+		assert.NotEmpty(t, spans.At(0).TraceID().String())
+
+		attrs := spans.At(0).Attributes()
+
+		assert.Equal(t, 6, attrs.Len())
+		ensureTraceStrAttr(t, attrs, attribute.Key(attr.DBOperation), "insert")
+		ensureTraceStrAttr(t, attrs, attribute.Key(attr.DBCollectionName), "mycollection")
+		ensureTraceStrAttr(t, attrs, attribute.Key(attr.DBNamespace), "mydatabase")
+		ensureTraceStrAttr(t, attrs, attribute.Key(attr.DBSystemName), "mongodb")
+		ensureTraceAttrNotExists(t, attrs, attribute.Key(attr.DBQueryText))
+		assert.Equal(t, ptrace.StatusCodeUnset, spans.At(0).Status().Code())
+	})
+	t.Run("test Mongo trace generation with error", func(t *testing.T) {
+		span := request.Span{Type: request.EventTypeMongoClient, Method: "insert", Path: "mycollection", DBNamespace: "mydatabase", Status: 1, DBError: request.DBError{ErrorCode: "1", Description: "Internal MongoDB error"}}
+		tAttrs := TraceAttributes(&span, map[attr.Name]struct{}{"db.operation.name": {}})
+		traces := GenerateTraces(&span.Service, []attribute.KeyValue{}, "host-id", groupFromSpanAndAttributes(&span, tAttrs))
+
+		assert.Equal(t, 1, traces.ResourceSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, 1, traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+		spans := traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+
+		assert.NotEmpty(t, spans.At(0).SpanID().String())
+		assert.NotEmpty(t, spans.At(0).TraceID().String())
+
+		attrs := spans.At(0).Attributes()
+
+		assert.Equal(t, 7, attrs.Len())
+		ensureTraceStrAttr(t, attrs, attribute.Key(attr.DBOperation), "insert")
+		ensureTraceStrAttr(t, attrs, attribute.Key(attr.DBCollectionName), "mycollection")
+		ensureTraceStrAttr(t, attrs, attribute.Key(attr.DBNamespace), "mydatabase")
+		ensureTraceStrAttr(t, attrs, attribute.Key(attr.DBSystemName), "mongodb")
+		ensureTraceStrAttr(t, attrs, attribute.Key(attr.DBResponseStatusCode), "1")
+		ensureTraceAttrNotExists(t, attrs, attribute.Key(attr.DBQueryText))
+		assert.Equal(t, ptrace.StatusCodeError, spans.At(0).Status().Code())
+		assert.Equal(t, "Internal MongoDB error", spans.At(0).Status().Message())
+	})
 	t.Run("test env var resource attributes", func(t *testing.T) {
 		defer restoreEnvAfterExecution()()
 		require.NoError(t, os.Setenv(envResourceAttrs, "deployment.environment=productions,source.upstream=beyla"))
@@ -948,7 +996,7 @@ func TestTracesInstrumentations(t *testing.T) {
 		{
 			name:     "all instrumentations",
 			instr:    []string{instrumentations.InstrumentationALL},
-			expected: []string{"GET /foo", "PUT /bar", "/grpcFoo", "/grpcGoo", "SELECT credentials", "SET", "GET", "important-topic publish", "important-topic process"},
+			expected: []string{"GET /foo", "PUT /bar", "/grpcFoo", "/grpcGoo", "SELECT credentials", "SET", "GET", "important-topic publish", "important-topic process", "insert mycollection"},
 		},
 		{
 			name:     "http only",
@@ -990,6 +1038,11 @@ func TestTracesInstrumentations(t *testing.T) {
 			instr:    []string{instrumentations.InstrumentationGRPC, instrumentations.InstrumentationKafka},
 			expected: []string{"/grpcFoo", "/grpcGoo", "important-topic publish", "important-topic process"},
 		},
+		{
+			name:     "mongo",
+			instr:    []string{instrumentations.InstrumentationMongo},
+			expected: []string{"insert mycollection"},
+		},
 	}
 
 	spans := []request.Span{
@@ -1002,6 +1055,7 @@ func TestTracesInstrumentations(t *testing.T) {
 		{Service: svc.Attrs{UID: svc.UID{Instance: "foo"}}, Type: request.EventTypeRedisServer, Method: "GET", Path: "redis_db", RequestStart: 150, End: 175},
 		{Type: request.EventTypeKafkaClient, Method: "process", Path: "important-topic", Statement: "test"},
 		{Type: request.EventTypeKafkaServer, Method: "publish", Path: "important-topic", Statement: "test"},
+		{Type: request.EventTypeMongoClient, Method: "insert", Path: "mycollection", DBNamespace: "mydatabase"},
 	}
 
 	for _, tt := range tests {
@@ -1447,6 +1501,18 @@ func TestHostPeerAttributes(t *testing.T) {
 			span:   request.Span{Type: request.EventTypeKafkaServer, PeerName: "client", HostName: "server", OtherNamespace: "far", Service: svc.Attrs{UID: svc.UID{Namespace: "same"}}},
 			client: "",
 			server: "server",
+		},
+		{
+			name:   "Same namespaces for Mongo client",
+			span:   request.Span{Type: request.EventTypeMongoClient, PeerName: "client", HostName: "server", OtherNamespace: "same", Service: svc.Attrs{UID: svc.UID{Namespace: "same"}}},
+			client: "",
+			server: "server",
+		},
+		{
+			name:   "Server in different namespace Mongo",
+			span:   request.Span{Type: request.EventTypeMongoClient, PeerName: "client", HostName: "server", OtherNamespace: "far", Service: svc.Attrs{UID: svc.UID{Namespace: "same"}}},
+			client: "",
+			server: "server.far",
 		},
 	}
 

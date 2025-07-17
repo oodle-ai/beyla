@@ -27,9 +27,14 @@ func (inf *Informers) Subscribe(observer Observer) {
 
 	// as a "welcome" message, we send the whole kube metadata to the new observer
 	for _, pod := range inf.pods.GetStore().List() {
+		// Skip completed pods (Succeeded or Failed) to avoid IP address reuse issues
+		podMeta := pod.(*indexableEntity).EncodedMeta
+		if podMeta.Pod != nil && (podMeta.Pod.Phase == "Succeeded" || podMeta.Pod.Phase == "Failed") {
+			continue
+		}
 		if err := observer.On(&informer.Event{
 			Type:     informer.EventType_CREATED,
-			Resource: pod.(*indexableEntity).EncodedMeta,
+			Resource: podMeta,
 		}); err != nil {
 			inf.log.Debug("error notifying observer. Unsubscribing", "observerID", observer.ID(), "error", err)
 			inf.BaseNotifier.Unsubscribe(observer)

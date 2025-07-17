@@ -13,10 +13,10 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
-
 	"github.com/grafana/beyla/v2/pkg/config"
 	"github.com/grafana/beyla/v2/pkg/internal/ebpf/ringbuf"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 )
 
 //go:generate $BPF2GO -cc $BPF_CLANG -cflags $BPF_CFLAGS -target amd64,arm64 -type http_request_trace -type sql_request_trace -type http_info_t -type connection_info_t -type http2_grpc_request_t -type tcp_req_t -type kafka_client_req_t -type kafka_go_req_t  -type redis_client_req_t bpf ../../../../bpf/common/common.c -- -I../../../../bpf
@@ -85,6 +85,17 @@ type SockMsg struct {
 	AttachAs ebpf.AttachType
 }
 
+type EBPFParseContext struct {
+	mongoRequestCache *PendingMongoDBRequests
+}
+
+func NewEBPFParseContext(cfg *config.EBPFTracer) *EBPFParseContext {
+	mongoRequestCache := expirable.NewLRU[MongoRequestKey, *MongoRequestValue](1000, nil, 0)
+	return &EBPFParseContext{
+		mongoRequestCache: &mongoRequestCache,
+	}
+}
+
 type MisclassifiedEvent struct {
 	EventType int
 	TCPInfo   *TCPRequestInfo
@@ -94,7 +105,7 @@ var MisclassifiedEvents = make(chan MisclassifiedEvent)
 
 func ptlog() *slog.Logger { return slog.With("component", "ebpf.ProcessTracer") }
 
-func ReadBPFTraceAsSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
+func ReadBPFTraceAsSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
 	if len(record.RawSample) == 0 {
 		return request.Span{}, true, fmt.Errorf("invalid ringbuffer record size")
 	}
@@ -109,7 +120,7 @@ func ReadBPFTraceAsSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filter S
 	case EventTypeKHTTP2:
 		return ReadHTTP2InfoIntoSpan(record, filter)
 	case EventTypeTCP:
-		return ReadTCPRequestIntoSpan(cfg, record, filter)
+		return ReadTCPRequestIntoSpan(parseCtx, cfg, record, filter)
 	case EventTypeGoSarama:
 		return ReadGoSaramaRequestIntoSpan(record)
 	case EventTypeGoRedis:

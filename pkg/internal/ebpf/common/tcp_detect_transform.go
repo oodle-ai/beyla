@@ -9,7 +9,7 @@ import (
 )
 
 // nolint:cyclop
-func ReadTCPRequestIntoSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
+func ReadTCPRequestIntoSpan(parseCtx *EBPFParseContext, cfg *config.EBPFTracer, record *ringbuf.Record, filter ServiceFilter) (request.Span, bool, error) {
 	event, err := ReinterpretCast[TCPRequestInfo](record.RawSample)
 
 	if err != nil {
@@ -54,6 +54,20 @@ func ReadTCPRequestIntoSpan(cfg *config.EBPFTracer, record *ringbuf.Record, filt
 		op, uri, status := detectFastCGI(b, event.Rbuf[:rl])
 		if status >= 0 {
 			return TCPToFastCGIToSpan(event, op, uri, status), false, nil
+		}
+	}
+
+	var mongoRequest *MongoRequestValue
+	var moreToCome bool
+	_, _, err = ProcessMongoEvent(b, int64(event.StartMonotimeNs), int64(event.EndMonotimeNs), event.ConnInfo, *parseCtx.mongoRequestCache)
+	if err == nil {
+		mongoRequest, moreToCome, err = ProcessMongoEvent(event.Rbuf[:rl], int64(event.StartMonotimeNs), int64(event.EndMonotimeNs), event.ConnInfo, *parseCtx.mongoRequestCache)
+	}
+	if err == nil && !moreToCome && mongoRequest != nil {
+		mongoInfo, err := getMongoInfo(mongoRequest)
+		if err == nil {
+			mongoSpan := TCPToMongoToSpan(event, mongoInfo)
+			return mongoSpan, false, nil
 		}
 	}
 

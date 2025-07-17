@@ -95,6 +95,8 @@ func SpanOTELGetters(name attr.Name) (attributes.Getter[*Span, attribute.KeyValu
 				return DBSystemName(span.DBSystemName().Value.AsString())
 			case EventTypeRedisClient, EventTypeRedisServer:
 				return DBSystemName(semconv.DBSystemRedis.Value.AsString())
+			case EventTypeMongoClient:
+				return DBSystemName(semconv.DBSystemMongoDB.Value.AsString())
 			}
 			return DBSystemName("unknown")
 		}
@@ -174,6 +176,8 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 				return span.DBSystemName().Value.AsString()
 			case EventTypeRedisClient, EventTypeRedisServer:
 				return semconv.DBSystemRedis.Value.AsString()
+			case EventTypeMongoClient:
+				return semconv.DBSystemMongoDB.Value.AsString()
 			}
 			return "unknown"
 		}
@@ -181,6 +185,9 @@ func SpanPromGetters(attrName attr.Name) (attributes.Getter[*Span, string], bool
 		getter = func(span *Span) string {
 			if span.Type == EventTypeSQLClient {
 				return span.DBSystemName().Value.AsString()
+			}
+			if span.Type == EventTypeMongoClient {
+				return span.Path
 			}
 			return ""
 		}
