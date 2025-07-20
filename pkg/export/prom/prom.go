@@ -1002,15 +1002,17 @@ func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 	if span.IsClientSpan() {
 		peerName := request.SpanPeerName(span)
 		hostName := request.SpanHostName(span)
+		if span.Type == request.EventTypeHTTPClient {
+			hostName = request.HTTPClientHost(span)
+		}
 		// HACK: Mongo eBPF events have empty peer/host.
 		// For now, we set peer to be service name and host to be static "MongoDB" representing MongoDB cluster.
 		if span.Type == request.EventTypeMongoClient {
 			if peerName == "" {
 				peerName = span.Service.UID.Name
 			}
-			if hostName == "" {
-				hostName = "MongoDB"
-			}
+
+			hostName = "MongoDB"
 		}
 		values = []string{
 			peerName,
@@ -1020,10 +1022,12 @@ func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 			"beyla",
 		}
 	} else {
+		peerName := request.SpanPeerName(span)
+		hostName := request.SpanHostName(span)
 		values = []string{
-			request.SpanPeerName(span),
+			peerName,
 			span.OtherNamespace,
-			request.SpanHostName(span),
+			hostName,
 			span.Service.UID.Namespace,
 			"beyla",
 		}
