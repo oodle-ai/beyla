@@ -18,6 +18,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/agent"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/internal/spanlog"
 )
 
 // RunBeyla in the foreground process. This is a blocking function and won't exit
@@ -28,8 +29,15 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
 		return fmt.Errorf("can't build common context info: %w", err)
 	}
 
-	// Start the admin HTTP server if configured
+	// Register admin handlers before starting the admin server
 	if ctxInfo.AdminManager != nil {
+		// Create span logger and register handlers early
+		spanLogger := spanlog.NewSpanLogger(cfg.Prometheus.SpanLogging)
+		handler := spanlog.CreateSpanLoggingHandler(spanLogger)
+		ctxInfo.AdminManager.RegisterHandler("/debug/span-logging", handler)
+		ctxInfo.SpanLogger = spanLogger // Store for prometheus reporter to use
+		slog.Info("registered span logging debug endpoint", "port", "admin", "path", "/debug/span-logging")
+
 		ctxInfo.AdminManager.StartHTTP(ctx)
 	}
 

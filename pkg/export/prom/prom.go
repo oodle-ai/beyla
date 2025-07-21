@@ -22,6 +22,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/spanlog"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
 	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
@@ -136,7 +137,7 @@ type PrometheusConfig struct {
 	HostnameMapping *request.HostnameMapping `yaml:"hostname_mapping"`
 
 	// SpanLogging configures span logging for debugging and monitoring purposes
-	SpanLogging *SpanLoggingConfig `yaml:"span_logging"`
+	SpanLogging *spanlog.SpanLoggingConfig `yaml:"span_logging"`
 }
 
 func mlog() *slog.Logger {
@@ -249,7 +250,7 @@ type metricsReporter struct {
 
 	serviceMap     map[svc.UID]svc.Attrs
 	pidWhitelister *whitelister.PIDWhitelister
-	spanLogger     *SpanLogger
+	spanLogger     *spanlog.SpanLogger
 }
 
 func PrometheusEndpoint(
@@ -389,7 +390,6 @@ func newReporter(
 		attrGPUKernelCalls:         attrGPUKernelLaunchCalls,
 		attrGPUMemoryAllocs:        attrGPUMemoryAllocations,
 		pidWhitelister:             whitelister.GetPIDWhitelister(),
-		spanLogger:                 NewSpanLogger(cfg.SpanLogging),
 		beylaInfo: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: BeylaBuildInfo,
 			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
@@ -623,6 +623,13 @@ func newReporter(
 		}),
 	}
 
+	// Use shared spanLogger from ContextInfo if available, otherwise create new one
+	if ctxInfo.SpanLogger != nil {
+		mr.spanLogger = ctxInfo.SpanLogger
+	} else {
+		mr.spanLogger = spanlog.NewSpanLogger(cfg.SpanLogging)
+	}
+
 	registeredMetrics := []prometheus.Collector{mr.targetInfo}
 
 	if !mr.cfg.DisableBuildInfo {
@@ -700,14 +707,12 @@ func newReporter(
 		mr.promConnect.Register(cfg.Port, cfg.Path, registeredMetrics...)
 	}
 
-	// Register debug endpoints for span logging configuration with AdminManager
-	if mr.ctxInfo.AdminManager != nil {
-		handler := CreateSpanLoggingHandler(mr.spanLogger)
-		mr.ctxInfo.AdminManager.RegisterHandler("/debug/span-logging", handler)
-		mlog().Info("registered span logging debug endpoint", "port", "admin", "path", "/debug/span-logging")
-	}
-
 	return mr, nil
+}
+
+// SetSpanLogger allows injecting a spanLogger from outside (e.g., for shared admin handlers)
+func (r *metricsReporter) SetSpanLogger(spanLogger *spanlog.SpanLogger) {
+	r.spanLogger = spanLogger
 }
 
 func parseExtraMetadata(labels []string) []attr.Name {

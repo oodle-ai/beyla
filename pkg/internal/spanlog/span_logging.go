@@ -1,34 +1,34 @@
-package prom
+package spanlog
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strings"
 	"sync"
 
 	"github.com/grafana/beyla/v2/pkg/internal/request"
 )
 
-// SpanLoggingConfig defines the configuration for span logging
+// SpanLoggingConfig configures span logging for debugging purposes
 type SpanLoggingConfig struct {
 	// Enabled controls whether span logging is active
 	Enabled bool `yaml:"enabled" json:"enabled"`
-	// Categories contains configuration for different metric categories
+	// Categories defines per-category logging configuration
 	Categories map[string]*CategoryConfig `yaml:"categories" json:"categories"`
 }
 
-// CategoryConfig defines the logging configuration for a specific metric category
+// CategoryConfig defines logging configuration for a specific span category
 type CategoryConfig struct {
-	// Enabled controls whether logging is active for this category
+	// Enabled controls whether this category should be logged
 	Enabled bool `yaml:"enabled" json:"enabled"`
-	// LabelFilters contains key-value pairs that must match for a span to be logged
-	// If empty, all spans in this category will be logged
+	// LabelFilters specifies label-based filtering for this category
+	// Only spans where ALL specified labels match will be logged
 	LabelFilters map[string]string `yaml:"label_filters" json:"label_filters"`
 }
 
-// SpanLogger handles thread-safe span logging with configurable filtering
+// SpanLogger handles span logging with configurable filtering
 type SpanLogger struct {
 	mu     sync.RWMutex
 	config *SpanLoggingConfig
@@ -49,7 +49,7 @@ func NewSpanLogger(config *SpanLoggingConfig) *SpanLogger {
 
 	return &SpanLogger{
 		config: config,
-		logger: slog.With("component", "prom.SpanLogger"),
+		logger: slog.With("component", "spanlog.SpanLogger"),
 	}
 }
 
@@ -108,19 +108,18 @@ func (sl *SpanLogger) LogSpan(category string, span *request.Span, labelValuesFu
 	}
 
 	categoryConfig, exists := sl.config.Categories[category]
-	if !exists || categoryConfig == nil || !categoryConfig.Enabled {
+	if !exists || !categoryConfig.Enabled {
 		sl.mu.RUnlock()
 		return
 	}
 
-	// Only compute label values if we might need them
-	var labelValues map[string]string
+	// Check label filters if any are configured
 	if len(categoryConfig.LabelFilters) > 0 {
-		labelValues = labelValuesFunc()
+		// Compute label values only if we have filters to check
+		labelValues := labelValuesFunc()
 
-		// Check if all label filters match
 		for filterKey, filterValue := range categoryConfig.LabelFilters {
-			if labelValue, exists := labelValues[filterKey]; !exists || labelValue != filterValue {
+			if actualValue, exists := labelValues[filterKey]; !exists || actualValue != filterValue {
 				sl.mu.RUnlock()
 				return
 			}
@@ -129,24 +128,64 @@ func (sl *SpanLogger) LogSpan(category string, span *request.Span, labelValuesFu
 
 	sl.mu.RUnlock()
 
-	// Build log fields from span directly
-	fields := []interface{}{
+	// Log the span as-is
+	sl.logger.Info("span logged",
 		"category", category,
-		"span", span, // Log the entire span
+		"span", span)
+}
+
+// ValidConfig validates span logging configuration
+func ValidConfig(config *SpanLoggingConfig) error {
+	if config == nil {
+		return nil
 	}
 
-	// Add label values if computed
-	if labelValues != nil {
-		for k, v := range labelValues {
-			fields = append(fields, "label_"+k, v)
+	if config.Categories == nil {
+		return nil
+	}
+
+	for categoryName := range config.Categories {
+		if !isValidCategory(categoryName) {
+			return &InvalidCategoryError{Category: categoryName}
 		}
 	}
 
-	sl.logger.Info("span_logged", fields...)
+	return nil
 }
 
-// getSpanCategory determines the category for a given span type
-func getSpanCategory(span *request.Span) string {
+// InvalidCategoryError represents an error for invalid span category
+type InvalidCategoryError struct {
+	Category string
+}
+
+func (e *InvalidCategoryError) Error() string {
+	return fmt.Sprintf("invalid span category: %s. Valid categories are: %s",
+		e.Category, strings.Join(validCategories, ", "))
+}
+
+// Valid span categories based on request event types
+var validCategories = []string{
+	"http_server",
+	"http_client",
+	"grpc_server",
+	"grpc_client",
+	"db_client",
+	"messaging",
+	"service_graph",
+	"gpu",
+}
+
+func isValidCategory(category string) bool {
+	for _, valid := range validCategories {
+		if category == valid {
+			return true
+		}
+	}
+	return false
+}
+
+// GetSpanCategory returns the appropriate category for a span based on its type
+func GetSpanCategory(span *request.Span) string {
 	switch span.Type {
 	case request.EventTypeHTTP:
 		return "http_server"
@@ -156,45 +195,16 @@ func getSpanCategory(span *request.Span) string {
 		return "grpc_server"
 	case request.EventTypeGRPCClient:
 		return "grpc_client"
-	case request.EventTypeSQLClient, request.EventTypeRedisClient, request.EventTypeRedisServer, request.EventTypeMongoClient:
+	case request.EventTypeRedisClient, request.EventTypeSQLClient,
+		request.EventTypeRedisServer, request.EventTypeMongoClient:
 		return "db_client"
 	case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
 		return "messaging"
 	case request.EventTypeGPUKernelLaunch, request.EventTypeGPUMalloc:
 		return "gpu"
 	default:
-		return "unknown"
+		return ""
 	}
-}
-
-// ValidateConfig validates a SpanLoggingConfig for correctness
-func ValidateConfig(config *SpanLoggingConfig) error {
-	if config == nil {
-		return nil
-	}
-
-	validCategories := []string{
-		"http_server", "http_client", "grpc_server", "grpc_client",
-		"db_client", "messaging", "gpu", "service_graph",
-	}
-
-	for category := range config.Categories {
-		if !slices.Contains(validCategories, category) {
-			return &InvalidCategoryError{Category: category, ValidCategories: validCategories}
-		}
-	}
-
-	return nil
-}
-
-// InvalidCategoryError represents an error for invalid category names
-type InvalidCategoryError struct {
-	Category        string
-	ValidCategories []string
-}
-
-func (e *InvalidCategoryError) Error() string {
-	return "invalid category '" + e.Category + "', valid categories are: " + strings.Join(e.ValidCategories, ", ")
 }
 
 // MarshalJSON implements json.Marshaler for SpanLoggingConfig
@@ -206,19 +216,20 @@ func (c *SpanLoggingConfig) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON implements json.Unmarshaler for SpanLoggingConfig
 func (c *SpanLoggingConfig) UnmarshalJSON(data []byte) error {
 	type Alias SpanLoggingConfig
-	aux := (*Alias)(c)
-	if err := json.Unmarshal(data, aux); err != nil {
+	alias := (*Alias)(c)
+	if err := json.Unmarshal(data, alias); err != nil {
 		return err
 	}
-	return ValidateConfig(c)
+
+	return ValidConfig(c)
 }
 
-// CreateSpanLoggingHandler creates a single HTTP handler for managing span logging configuration
-// It supports both GET (retrieve config) and PUT (update config) methods
+// CreateSpanLoggingHandler creates an HTTP handler for span logging configuration
 func CreateSpanLoggingHandler(spanLogger *SpanLogger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
+			// Return current configuration
 			config := spanLogger.GetConfig()
 			w.Header().Set("Content-Type", "application/json")
 			if err := json.NewEncoder(w).Encode(config); err != nil {
@@ -227,23 +238,24 @@ func CreateSpanLoggingHandler(spanLogger *SpanLogger) http.Handler {
 			}
 
 		case http.MethodPut:
-			var config SpanLoggingConfig
-			if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+			// Update configuration
+			var newConfig SpanLoggingConfig
+			if err := json.NewDecoder(r.Body).Decode(&newConfig); err != nil {
 				http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
 				return
 			}
 
-			if err := ValidateConfig(&config); err != nil {
+			if err := ValidConfig(&newConfig); err != nil {
 				http.Error(w, "Invalid configuration: "+err.Error(), http.StatusBadRequest)
 				return
 			}
 
-			spanLogger.UpdateConfig(&config)
-			w.Header().Set("Content-Type", "application/json")
+			spanLogger.UpdateConfig(&newConfig)
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
+			w.Write([]byte("Configuration updated successfully"))
 
 		default:
+			w.Header().Set("Allow", "GET, PUT")
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})

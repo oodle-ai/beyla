@@ -14,19 +14,17 @@ func adminLog() *slog.Logger {
 
 // AdminManager manages admin HTTP endpoints on a dedicated port
 type AdminManager struct {
-	mu       sync.Mutex
-	started  bool
-	port     int
-	handlers map[string]http.Handler
-	mux      *http.ServeMux
+	mu      sync.Mutex
+	started bool
+	port    int
+	mux     *http.ServeMux
 }
 
 // NewAdminManager creates a new AdminManager for the given port
 func NewAdminManager(port int) *AdminManager {
 	return &AdminManager{
-		port:     port,
-		handlers: make(map[string]http.Handler),
-		mux:      http.NewServeMux(),
+		port: port,
+		mux:  http.NewServeMux(),
 	}
 }
 
@@ -36,7 +34,6 @@ func (am *AdminManager) RegisterHandler(path string, handler http.Handler) {
 	defer am.mu.Unlock()
 
 	adminLog().Debug("registering admin handler", "port", am.port, "path", path)
-	am.handlers[path] = handler
 	am.mux.Handle(path, handler)
 }
 
