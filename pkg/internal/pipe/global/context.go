@@ -21,6 +21,8 @@ type ContextInfo struct {
 	Metrics imetrics.Reporter
 	// Prometheus connection manager to coordinate metrics exposition from diverse nodes
 	Prometheus *connector.PrometheusManager
+	// AdminManager provides admin HTTP endpoints on a dedicated port
+	AdminManager *connector.AdminManager
 	// MetricAttributeGroups will selectively enable or disable diverse groups of attributes
 	// in the metric exporters
 	MetricAttributeGroups attributes.AttrGroups

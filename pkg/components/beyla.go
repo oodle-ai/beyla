@@ -28,6 +28,11 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
 		return fmt.Errorf("can't build common context info: %w", err)
 	}
 
+	// Start the admin HTTP server if configured
+	if ctxInfo.AdminManager != nil {
+		ctxInfo.AdminManager.StartHTTP(ctx)
+	}
+
 	app := cfg.Enabled(beyla.FeatureAppO11y)
 	net := cfg.Enabled(beyla.FeatureNetO11y)
 
@@ -139,8 +144,10 @@ func buildCommonContextInfo(
 	}
 
 	promMgr := &connector.PrometheusManager{}
+	adminMgr := connector.NewAdminManager(config.AdminPort)
 	ctxInfo := &global.ContextInfo{
-		Prometheus: promMgr,
+		Prometheus:   promMgr,
+		AdminManager: adminMgr,
 		K8sInformer: kube.NewMetadataProvider(kube.MetadataConfig{
 			Enable:            config.Attributes.Kubernetes.Enable,
 			KubeConfigPath:    config.Attributes.Kubernetes.KubeconfigPath,
