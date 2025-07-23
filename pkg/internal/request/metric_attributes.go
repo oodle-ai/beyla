@@ -140,6 +140,24 @@ func SpanHost(span *Span) string {
 	return span.Host
 }
 
+func handleUnresolvedIP(addr string, replacement string) string {
+	if addr == "" {
+		return ""
+	}
+
+	// Check if it's an IP address first
+	ip := net.ParseIP(addr)
+	if ip != nil {
+		// Handle IP addresses based on METRICS_ALLOW_UNRESOLVED_IP flag only
+		if *metricsAllowUnresolvedIP {
+			return addr
+		}
+		return replacement
+	}
+
+	return addr
+}
+
 // replace IP address with fixed replacement string to reduce
 // cardinality. Also maps known domains to generic service names.
 func handleUnresolvedIPAndExternalHosts(addr string, replacement string) string {
@@ -196,11 +214,22 @@ func SpanPeerName(span *Span) string {
 	return handleUnresolvedIPAndExternalHosts(span.Peer, unresolvedIP)
 }
 
+func isSchemeHostClusterLocal(schemeHost string) bool {
+	// Do not use span.Statement for hostname for internal cluster traffic, rely on K8s name resolver for it
+	// examples: <server>.<namespace>.svc.cluster.local, <server>.<namespace>, <server>:<port>
+	return strings.Contains(schemeHost, SvcClusterLocal) ||
+		strings.Count(schemeHost, ".") == 2 ||
+		strings.Index(schemeHost, ".") == -1
+}
+
 func HTTPClientHost(span *Span) string {
 	if utf8.ValidString(span.Statement) && strings.Index(span.Statement, SchemeHostSeparator) > 0 {
 		schemeHost := strings.Split(span.Statement, SchemeHostSeparator)
-		if schemeHost[1] != "" {
-			return schemeHost[1]
+		if schemeHost[1] != "" && !isSchemeHostClusterLocal(schemeHost[1]) {
+			addrPort := strings.Split(schemeHost[1], AddrPortSeparator)
+			if addrPort[0] != "" {
+				return handleUnresolvedIP(addrPort[0], unresolvedHost)
+			}
 		}
 	}
 
