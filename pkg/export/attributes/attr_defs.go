@@ -140,6 +140,22 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 		},
 	}
 
+	// low cardinality attributes to be reported exclusively for application metrics when
+	// kubernetes metadata is enabled.
+	// This contains a subset of k8s attributes which are low cardinality.
+	var lowCardinalityK8sAppAttributes = AttrReportGroup{
+		Disabled: !kubeEnabled,
+		Attributes: map[attr.Name]Default{
+			attr.K8sNamespaceName:   true,
+			attr.K8sContainerName:   true,
+			attr.K8sDeploymentName:  true,
+			attr.K8sReplicaSetName:  true,
+			attr.K8sDaemonSetName:   true,
+			attr.K8sStatefulSetName: true,
+			attr.K8sClusterName:     true,
+		},
+	}
+
 	var httpRoutes = AttrReportGroup{
 		Disabled: !groups.Has(GroupHTTPRoutes),
 		Attributes: map[attr.Name]Default{
@@ -225,25 +241,25 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			SubGroups: []*AttrReportGroup{&networkInterZone, &networkInterZoneCIDR, &networkInterZoneKube},
 		},
 		HTTPServerDuration.Section: {
-			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
+			SubGroups: []*AttrReportGroup{&appAttributes, &lowCardinalityK8sAppAttributes, &httpCommon, &serverInfo},
 		},
 		HTTPServerRequestSize.Section: {
-			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
+			SubGroups: []*AttrReportGroup{&appAttributes, &lowCardinalityK8sAppAttributes, &httpCommon, &serverInfo},
 		},
 		HTTPServerResponseSize.Section: {
-			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &serverInfo},
+			SubGroups: []*AttrReportGroup{&appAttributes, &lowCardinalityK8sAppAttributes, &httpCommon, &serverInfo},
 		},
 		HTTPClientDuration.Section: {
-			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
+			SubGroups: []*AttrReportGroup{&appAttributes, &lowCardinalityK8sAppAttributes, &httpCommon, &httpClientInfo},
 		},
 		HTTPClientRequestSize.Section: {
-			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
+			SubGroups: []*AttrReportGroup{&appAttributes, &lowCardinalityK8sAppAttributes, &httpCommon, &httpClientInfo},
 		},
 		HTTPClientResponseSize.Section: {
-			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &httpCommon, &httpClientInfo},
+			SubGroups: []*AttrReportGroup{&appAttributes, &lowCardinalityK8sAppAttributes, &httpCommon, &httpClientInfo},
 		},
 		RPCClientDuration.Section: {
-			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &grpcClientInfo},
+			SubGroups: []*AttrReportGroup{&appAttributes, &lowCardinalityK8sAppAttributes, &grpcClientInfo},
 			Attributes: map[attr.Name]Default{
 				attr.RPCMethod:         true,
 				attr.RPCSystem:         true,
@@ -251,7 +267,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			},
 		},
 		RPCServerDuration.Section: {
-			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes, &serverInfo},
+			SubGroups: []*AttrReportGroup{&appAttributes, &lowCardinalityK8sAppAttributes, &serverInfo},
 			Attributes: map[attr.Name]Default{
 				attr.RPCMethod:         true,
 				attr.RPCSystem:         true,
@@ -259,7 +275,7 @@ func getDefinitions(groups AttrGroups) map[Section]AttrReportGroup {
 			},
 		},
 		DBClientDuration.Section: {
-			SubGroups: []*AttrReportGroup{&appAttributes, &appKubeAttributes},
+			SubGroups: []*AttrReportGroup{&appAttributes, &lowCardinalityK8sAppAttributes},
 			Attributes: map[attr.Name]Default{
 				attr.DBOperation:      true,
 				attr.DBSystemName:     true,
