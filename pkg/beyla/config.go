@@ -127,6 +127,7 @@ var DefaultConfig = Config{
 		WildcardChar: "*",
 	},
 	NetworkFlows: defaultNetworkConfig,
+	AdminPort:    6061,
 	Processes: process.CollectConfig{
 		RunMode:  process.RunModePrivileged,
 		Interval: 5 * time.Second,
@@ -197,7 +198,9 @@ type Config struct {
 	// nolint:undoc
 	ChannelBufferLen int `yaml:"channel_buffer_len" env:"BEYLA_CHANNEL_BUFFER_LEN"`
 	// nolint:undoc
-	ProfilePort     int             `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
+	ProfilePort int `yaml:"profile_port" env:"BEYLA_PROFILE_PORT"`
+	// nolint:undoc
+	AdminPort       int             `yaml:"admin_port" env:"BEYLA_ADMIN_PORT"`
 	InternalMetrics imetrics.Config `yaml:"internal_metrics"`
 
 	// Processes metrics for application. They will be only enabled if there is a metrics exporter enabled,

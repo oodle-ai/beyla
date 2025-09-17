@@ -5,6 +5,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/connector"
 	"github.com/grafana/beyla/v2/pkg/internal/imetrics"
 	kube2 "github.com/grafana/beyla/v2/pkg/internal/kube"
+	"github.com/grafana/beyla/v2/pkg/internal/spanlog"
 )
 
 // ContextInfo stores some context information that must be shared across some nodes of the
@@ -21,6 +22,10 @@ type ContextInfo struct {
 	Metrics imetrics.Reporter
 	// Prometheus connection manager to coordinate metrics exposition from diverse nodes
 	Prometheus *connector.PrometheusManager
+	// AdminManager provides admin HTTP endpoints on a dedicated port
+	AdminManager *connector.AdminManager
+	// SpanLogger for sharing between admin handlers and prometheus reporter
+	SpanLogger *spanlog.SpanLogger
 	// MetricAttributeGroups will selectively enable or disable diverse groups of attributes
 	// in the metric exporters
 	MetricAttributeGroups attributes.AttrGroups

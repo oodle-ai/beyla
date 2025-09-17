@@ -140,6 +140,24 @@ func SpanHost(span *Span) string {
 	return span.Host
 }
 
+func handleUnresolvedIP(addr string, replacement string) string {
+	if addr == "" {
+		return ""
+	}
+
+	// Check if it's an IP address first
+	ip := net.ParseIP(addr)
+	if ip != nil {
+		// Handle IP addresses based on METRICS_ALLOW_UNRESOLVED_IP flag only
+		if *metricsAllowUnresolvedIP {
+			return addr
+		}
+		return replacement
+	}
+
+	return addr
+}
+
 // replace IP address with fixed replacement string to reduce
 // cardinality. Also maps known domains to generic service names.
 func handleUnresolvedIPAndExternalHosts(addr string, replacement string) string {
@@ -196,11 +214,22 @@ func SpanPeerName(span *Span) string {
 	return handleUnresolvedIPAndExternalHosts(span.Peer, unresolvedIP)
 }
 
+func isSchemeHostClusterLocal(schemeHost string) bool {
+	// Do not use span.Statement for hostname for internal cluster traffic, rely on K8s name resolver for it
+	// examples: <server>.<namespace>.svc.cluster.local, <server>.<namespace>, <server>:<port>
+	return strings.Contains(schemeHost, SvcClusterLocal) ||
+		strings.Count(schemeHost, ".") == 2 ||
+		strings.Index(schemeHost, ".") == -1
+}
+
 func HTTPClientHost(span *Span) string {
 	if utf8.ValidString(span.Statement) && strings.Index(span.Statement, SchemeHostSeparator) > 0 {
 		schemeHost := strings.Split(span.Statement, SchemeHostSeparator)
-		if schemeHost[1] != "" {
-			return schemeHost[1]
+		if schemeHost[1] != "" && !isSchemeHostClusterLocal(schemeHost[1]) {
+			addrPort := strings.Split(schemeHost[1], AddrPortSeparator)
+			if addrPort[0] != "" {
+				return handleUnresolvedIP(addrPort[0], unresolvedHost)
+			}
 		}
 	}
 
@@ -231,21 +260,21 @@ func URLFull(scheme, host, path string) string {
 func HostAsServer(span *Span) string {
 	if span.OtherNamespace != "" && span.OtherNamespace != span.Service.UID.Namespace && span.HostName != "" {
 		if span.IsClientSpan() {
-			return SpanHost(span) + "." + span.OtherNamespace
+			return SpanHostName(span) + "." + span.OtherNamespace
 		}
 	}
 
-	return SpanHost(span)
+	return SpanHostName(span)
 }
 
 func PeerAsClient(span *Span) string {
 	if span.OtherNamespace != "" && span.OtherNamespace != span.Service.UID.Namespace && span.PeerName != "" {
 		if !span.IsClientSpan() {
-			return SpanPeer(span) + "." + span.OtherNamespace
+			return SpanPeerName(span) + "." + span.OtherNamespace
 		}
 	}
 
-	return SpanPeer(span)
+	return SpanPeerName(span)
 }
 
 func CudaKernel(val string) attribute.KeyValue {

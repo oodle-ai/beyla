@@ -18,6 +18,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/agent"
 	"github.com/grafana/beyla/v2/pkg/internal/netolly/flow"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
+	"github.com/grafana/beyla/v2/pkg/internal/spanlog"
 )
 
 // RunBeyla in the foreground process. This is a blocking function and won't exit
@@ -26,6 +27,18 @@ func RunBeyla(ctx context.Context, cfg *beyla.Config) error {
 	ctxInfo, err := buildCommonContextInfo(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("can't build common context info: %w", err)
+	}
+
+	// Register admin handlers before starting the admin server
+	if ctxInfo.AdminManager != nil {
+		// Create span logger and register handlers early
+		spanLogger := spanlog.NewSpanLogger(cfg.Prometheus.SpanLogging)
+		handler := spanlog.CreateSpanLoggingHandler(spanLogger)
+		ctxInfo.AdminManager.RegisterHandler("/debug/span-logging", handler)
+		ctxInfo.SpanLogger = spanLogger // Store for prometheus reporter to use
+		slog.Info("registered span logging debug endpoint", "port", "admin", "path", "/debug/span-logging")
+
+		ctxInfo.AdminManager.StartHTTP(ctx)
 	}
 
 	app := cfg.Enabled(beyla.FeatureAppO11y)
@@ -139,8 +152,10 @@ func buildCommonContextInfo(
 	}
 
 	promMgr := &connector.PrometheusManager{}
+	adminMgr := connector.NewAdminManager(config.AdminPort)
 	ctxInfo := &global.ContextInfo{
-		Prometheus: promMgr,
+		Prometheus:   promMgr,
+		AdminManager: adminMgr,
 		K8sInformer: kube.NewMetadataProvider(kube.MetadataConfig{
 			Enable:            config.Attributes.Kubernetes.Enable,
 			KubeConfigPath:    config.Attributes.Kubernetes.KubeconfigPath,

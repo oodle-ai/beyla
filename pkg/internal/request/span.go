@@ -47,6 +47,8 @@ const (
 
 const (
 	SchemeHostSeparator = ";"
+	AddrPortSeparator   = ":"
+	SvcClusterLocal     = "svc.cluster.local"
 )
 
 type SQLKind uint8

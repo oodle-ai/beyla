@@ -22,6 +22,7 @@ import (
 	"github.com/grafana/beyla/v2/pkg/internal/exec"
 	"github.com/grafana/beyla/v2/pkg/internal/pipe/global"
 	"github.com/grafana/beyla/v2/pkg/internal/request"
+	"github.com/grafana/beyla/v2/pkg/internal/spanlog"
 	"github.com/grafana/beyla/v2/pkg/internal/svc"
 	"github.com/grafana/beyla/v2/pkg/pipe/msg"
 	"github.com/grafana/beyla/v2/pkg/pipe/swarm"
@@ -134,6 +135,9 @@ type PrometheusConfig struct {
 	// HostnameMapping allows configuring custom hostname to service name mappings for cardinality reduction
 	// This can be used to group multiple hostnames under a single service name (e.g., AWS services)
 	HostnameMapping *request.HostnameMapping `yaml:"hostname_mapping"`
+
+	// SpanLogging configures span logging for debugging and monitoring purposes
+	SpanLogging *spanlog.SpanLoggingConfig `yaml:"span_logging"`
 }
 
 func mlog() *slog.Logger {
@@ -246,6 +250,7 @@ type metricsReporter struct {
 
 	serviceMap     map[svc.UID]svc.Attrs
 	pidWhitelister *whitelister.PIDWhitelister
+	spanLogger     *spanlog.SpanLogger
 }
 
 func PrometheusEndpoint(
@@ -618,6 +623,13 @@ func newReporter(
 		}),
 	}
 
+	// Use shared spanLogger from ContextInfo if available, otherwise create new one
+	if ctxInfo.SpanLogger != nil {
+		mr.spanLogger = ctxInfo.SpanLogger
+	} else {
+		mr.spanLogger = spanlog.NewSpanLogger(cfg.SpanLogging)
+	}
+
 	registeredMetrics := []prometheus.Collector{mr.targetInfo}
 
 	if !mr.cfg.DisableBuildInfo {
@@ -696,6 +708,11 @@ func newReporter(
 	}
 
 	return mr, nil
+}
+
+// SetSpanLogger allows injecting a spanLogger from outside (e.g., for shared admin handlers)
+func (r *metricsReporter) SetSpanLogger(spanLogger *spanlog.SpanLogger) {
+	r.spanLogger = spanLogger
 }
 
 func parseExtraMetadata(labels []string) []attr.Name {
@@ -786,15 +803,23 @@ func (r *metricsReporter) observe(span *request.Span) {
 		switch span.Type {
 		case request.EventTypeHTTP:
 			if r.is.HTTPEnabled() {
-				r.httpDuration.WithLabelValues(
-					labelValues(span, r.attrHTTPDuration)...,
-				).metric.Observe(duration)
+				labelVals := labelValues(span, r.attrHTTPDuration)
+				r.httpDuration.WithLabelValues(labelVals...).metric.Observe(duration)
 				r.httpRequestSize.WithLabelValues(
 					labelValues(span, r.attrHTTPRequestSize)...,
 				).metric.Observe(float64(span.RequestBodyLength()))
 				r.httpResponseSize.WithLabelValues(
 					labelValues(span, r.attrHTTPResponseSize)...,
 				).metric.Observe(float64(span.ResponseBodyLength()))
+
+				// Log span for HTTP server metrics
+				r.spanLogger.LogSpan("http_server", span, func() map[string]string {
+					labels := make(map[string]string)
+					for _, getter := range r.attrHTTPDuration {
+						labels[getter.ExposedName] = getter.Get(span)
+					}
+					return labels
+				})
 			}
 		case request.EventTypeHTTPClient:
 			if r.is.HTTPEnabled() {
@@ -807,24 +832,60 @@ func (r *metricsReporter) observe(span *request.Span) {
 				r.httpClientResponseSize.WithLabelValues(
 					labelValues(span, r.attrHTTPClientResponseSize)...,
 				).metric.Observe(float64(span.ResponseBodyLength()))
+
+				// Log span for HTTP client metrics
+				r.spanLogger.LogSpan("http_client", span, func() map[string]string {
+					labels := make(map[string]string)
+					for _, getter := range r.attrHTTPClientDuration {
+						labels[getter.ExposedName] = getter.Get(span)
+					}
+					return labels
+				})
 			}
 		case request.EventTypeGRPC:
 			if r.is.GRPCEnabled() {
 				r.grpcDuration.WithLabelValues(
 					labelValues(span, r.attrGRPCDuration)...,
 				).metric.Observe(duration)
+
+				// Log span for GRPC server metrics
+				r.spanLogger.LogSpan("grpc_server", span, func() map[string]string {
+					labels := make(map[string]string)
+					for _, getter := range r.attrGRPCDuration {
+						labels[getter.ExposedName] = getter.Get(span)
+					}
+					return labels
+				})
 			}
 		case request.EventTypeGRPCClient:
 			if r.is.GRPCEnabled() {
 				r.grpcClientDuration.WithLabelValues(
 					labelValues(span, r.attrGRPCClientDuration)...,
 				).metric.Observe(duration)
+
+				// Log span for GRPC client metrics
+				r.spanLogger.LogSpan("grpc_client", span, func() map[string]string {
+					labels := make(map[string]string)
+					for _, getter := range r.attrGRPCClientDuration {
+						labels[getter.ExposedName] = getter.Get(span)
+					}
+					return labels
+				})
 			}
 		case request.EventTypeRedisClient, request.EventTypeSQLClient, request.EventTypeRedisServer, request.EventTypeMongoClient:
 			if r.is.DBEnabled() {
 				r.dbClientDuration.WithLabelValues(
 					labelValues(span, r.attrDBClientDuration)...,
 				).metric.Observe(duration)
+
+				// Log span for DB client metrics
+				r.spanLogger.LogSpan("db_client", span, func() map[string]string {
+					labels := make(map[string]string)
+					for _, getter := range r.attrDBClientDuration {
+						labels[getter.ExposedName] = getter.Get(span)
+					}
+					return labels
+				})
 			}
 		case request.EventTypeKafkaClient, request.EventTypeKafkaServer:
 			if r.is.MQEnabled() {
@@ -833,10 +894,28 @@ func (r *metricsReporter) observe(span *request.Span) {
 					r.msgPublishDuration.WithLabelValues(
 						labelValues(span, r.attrMsgPublishDuration)...,
 					).metric.Observe(duration)
+
+					// Log span for messaging publish metrics
+					r.spanLogger.LogSpan("messaging", span, func() map[string]string {
+						labels := make(map[string]string)
+						for _, getter := range r.attrMsgPublishDuration {
+							labels[getter.ExposedName] = getter.Get(span)
+						}
+						return labels
+					})
 				case request.MessagingProcess:
 					r.msgProcessDuration.WithLabelValues(
 						labelValues(span, r.attrMsgProcessDuration)...,
 					).metric.Observe(duration)
+
+					// Log span for messaging process metrics
+					r.spanLogger.LogSpan("messaging", span, func() map[string]string {
+						labels := make(map[string]string)
+						for _, getter := range r.attrMsgProcessDuration {
+							labels[getter.ExposedName] = getter.Get(span)
+						}
+						return labels
+					})
 				}
 			}
 		case request.EventTypeGPUKernelLaunch:
@@ -850,12 +929,30 @@ func (r *metricsReporter) observe(span *request.Span) {
 				r.gpuKernelBlockSize.WithLabelValues(
 					labelValues(span, r.attrGPUKernelBlockSize)...,
 				).metric.Observe(float64(span.SubType))
+
+				// Log span for GPU kernel launch metrics
+				r.spanLogger.LogSpan("gpu", span, func() map[string]string {
+					labels := make(map[string]string)
+					for _, getter := range r.attrGPUKernelCalls {
+						labels[getter.ExposedName] = getter.Get(span)
+					}
+					return labels
+				})
 			}
 		case request.EventTypeGPUMalloc:
 			if r.is.GPUEnabled() {
 				r.gpuMemoryAllocsTotal.WithLabelValues(
 					labelValues(span, r.attrGPUMemoryAllocs)...,
 				).metric.Add(float64(span.ContentLength))
+
+				// Log span for GPU memory allocation metrics
+				r.spanLogger.LogSpan("gpu", span, func() map[string]string {
+					labels := make(map[string]string)
+					for _, getter := range r.attrGPUMemoryAllocs {
+						labels[getter.ExposedName] = getter.Get(span)
+					}
+					return labels
+				})
 			}
 		}
 	}
@@ -880,6 +977,19 @@ func (r *metricsReporter) observe(span *request.Span) {
 			if request.SpanStatusCode(span) == request.StatusCodeError {
 				r.serviceGraphFailed.WithLabelValues(lvg...).metric.Add(1)
 			}
+
+			// Log span for service graph metrics
+			r.spanLogger.LogSpan("service_graph", span, func() map[string]string {
+				labels := make(map[string]string)
+				labelNames := []string{clientKey, clientNamespaceKey, serverKey, serverNamespaceKey}
+
+				for i, name := range labelNames {
+					if i < len(lvg) {
+						labels[name] = lvg[i]
+					}
+				}
+				return labels
+			})
 		}
 	}
 }
@@ -1002,15 +1112,17 @@ func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 	if span.IsClientSpan() {
 		peerName := request.SpanPeerName(span)
 		hostName := request.SpanHostName(span)
+		if span.Type == request.EventTypeHTTPClient {
+			hostName = request.HTTPClientHost(span)
+		}
 		// HACK: Mongo eBPF events have empty peer/host.
 		// For now, we set peer to be service name and host to be static "MongoDB" representing MongoDB cluster.
 		if span.Type == request.EventTypeMongoClient {
 			if peerName == "" {
 				peerName = span.Service.UID.Name
 			}
-			if hostName == "" {
-				hostName = "MongoDB"
-			}
+
+			hostName = "MongoDB"
 		}
 		values = []string{
 			peerName,
@@ -1020,10 +1132,12 @@ func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 			"beyla",
 		}
 	} else {
+		peerName := request.SpanPeerName(span)
+		hostName := request.SpanHostName(span)
 		values = []string{
-			request.SpanPeerName(span),
+			peerName,
 			span.OtherNamespace,
-			request.SpanHostName(span),
+			hostName,
 			span.Service.UID.Namespace,
 			"beyla",
 		}
