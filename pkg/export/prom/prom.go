@@ -293,21 +293,23 @@ func newReporter(
 
 	is := instrumentations.NewInstrumentationSelection(cfg.Instrumentations)
 
-	var attrHTTPDuration, attrHTTPClientDuration, attrHTTPRequestSize, attrHTTPResponseSize, attrHTTPClientRequestSize, attrHTTPClientResponseSize []attributes.Field[*request.Span, string]
+	var attrHTTPDuration, attrHTTPClientDuration []attributes.Field[*request.Span, string]
+	// var attrHTTPRequestSize, attrHTTPResponseSize, attrHTTPClientRequestSize, attrHTTPClientResponseSize []attributes.Field[*request.Span, string]
 
 	if is.HTTPEnabled() {
 		attrHTTPDuration = attributes.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attributes.HTTPServerDuration))
 		attrHTTPClientDuration = attributes.PrometheusGetters(request.SpanPromGetters,
 			attrsProvider.For(attributes.HTTPClientDuration))
-		attrHTTPRequestSize = attributes.PrometheusGetters(request.SpanPromGetters,
-			attrsProvider.For(attributes.HTTPServerRequestSize))
-		attrHTTPResponseSize = attributes.PrometheusGetters(request.SpanPromGetters,
-			attrsProvider.For(attributes.HTTPServerResponseSize))
-		attrHTTPClientRequestSize = attributes.PrometheusGetters(request.SpanPromGetters,
-			attrsProvider.For(attributes.HTTPClientRequestSize))
-		attrHTTPClientResponseSize = attributes.PrometheusGetters(request.SpanPromGetters,
-			attrsProvider.For(attributes.HTTPClientResponseSize))
+		// do not collect payload size metrics
+		//attrHTTPRequestSize = attributes.PrometheusGetters(request.SpanPromGetters,
+		//	attrsProvider.For(attributes.HTTPServerRequestSize))
+		//attrHTTPResponseSize = attributes.PrometheusGetters(request.SpanPromGetters,
+		//	attrsProvider.For(attributes.HTTPServerResponseSize))
+		//attrHTTPClientRequestSize = attributes.PrometheusGetters(request.SpanPromGetters,
+		//	attrsProvider.For(attributes.HTTPClientRequestSize))
+		//attrHTTPClientResponseSize = attributes.PrometheusGetters(request.SpanPromGetters,
+		//	attrsProvider.For(attributes.HTTPClientResponseSize))
 	}
 
 	var attrGRPCDuration, attrGRPCClientDuration []attributes.Field[*request.Span, string]
@@ -365,31 +367,31 @@ func newReporter(
 	}
 
 	mr := &metricsReporter{
-		input:                      input.Subscribe(),
-		processEvents:              processEventCh.Subscribe(),
-		serviceMap:                 map[svc.UID]svc.Attrs{},
-		ctxInfo:                    ctxInfo,
-		cfg:                        cfg,
-		kubeEnabled:                kubeEnabled,
-		extraMetadataLabels:        extraMetadataLabels,
-		hostID:                     ctxInfo.HostID,
-		clock:                      clock,
-		is:                         is,
-		promConnect:                ctxInfo.Prometheus,
-		attrHTTPDuration:           attrHTTPDuration,
-		attrHTTPClientDuration:     attrHTTPClientDuration,
-		attrGRPCDuration:           attrGRPCDuration,
-		attrGRPCClientDuration:     attrGRPCClientDuration,
-		attrDBClientDuration:       attrDBClientDuration,
-		attrMsgPublishDuration:     attrMessagingPublishDuration,
-		attrMsgProcessDuration:     attrMessagingProcessDuration,
-		attrHTTPRequestSize:        attrHTTPRequestSize,
-		attrHTTPResponseSize:       attrHTTPResponseSize,
-		attrHTTPClientRequestSize:  attrHTTPClientRequestSize,
-		attrHTTPClientResponseSize: attrHTTPClientResponseSize,
-		attrGPUKernelCalls:         attrGPUKernelLaunchCalls,
-		attrGPUMemoryAllocs:        attrGPUMemoryAllocations,
-		pidWhitelister:             whitelister.GetPIDWhitelister(),
+		input:                  input.Subscribe(),
+		processEvents:          processEventCh.Subscribe(),
+		serviceMap:             map[svc.UID]svc.Attrs{},
+		ctxInfo:                ctxInfo,
+		cfg:                    cfg,
+		kubeEnabled:            kubeEnabled,
+		extraMetadataLabels:    extraMetadataLabels,
+		hostID:                 ctxInfo.HostID,
+		clock:                  clock,
+		is:                     is,
+		promConnect:            ctxInfo.Prometheus,
+		attrHTTPDuration:       attrHTTPDuration,
+		attrHTTPClientDuration: attrHTTPClientDuration,
+		attrGRPCDuration:       attrGRPCDuration,
+		attrGRPCClientDuration: attrGRPCClientDuration,
+		attrDBClientDuration:   attrDBClientDuration,
+		attrMsgPublishDuration: attrMessagingPublishDuration,
+		attrMsgProcessDuration: attrMessagingProcessDuration,
+		//attrHTTPRequestSize:        attrHTTPRequestSize,
+		//attrHTTPResponseSize:       attrHTTPResponseSize,
+		//attrHTTPClientRequestSize:  attrHTTPClientRequestSize,
+		//attrHTTPClientResponseSize: attrHTTPClientResponseSize,
+		attrGPUKernelCalls:  attrGPUKernelLaunchCalls,
+		attrGPUMemoryAllocs: attrGPUMemoryAllocations,
+		pidWhitelister:      whitelister.GetPIDWhitelister(),
 		beylaInfo: NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: BeylaBuildInfo,
 			Help: "A metric with a constant '1' value labeled by version, revision, branch, " +
@@ -473,46 +475,46 @@ func newReporter(
 				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
 			}, labelNames(attrMessagingProcessDuration)).MetricVec, clock.Time, cfg.TTL)
 		}),
-		httpRequestSize: optionalHistogramProvider(is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
-			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:                            attributes.HTTPServerRequestSize.Prom,
-				Help:                            "size, in bytes, of the HTTP request body as received at the server side",
-				Buckets:                         cfg.Buckets.RequestSizeHistogram,
-				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
-				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
-				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-			}, labelNames(attrHTTPRequestSize)).MetricVec, clock.Time, cfg.TTL)
-		}),
-		httpResponseSize: optionalHistogramProvider(is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
-			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:                            attributes.HTTPServerResponseSize.Prom,
-				Help:                            "size, in bytes, of the HTTP response body as received at the server side",
-				Buckets:                         cfg.Buckets.ResponseSizeHistogram,
-				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
-				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
-				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-			}, labelNames(attrHTTPResponseSize)).MetricVec, clock.Time, cfg.TTL)
-		}),
-		httpClientRequestSize: optionalHistogramProvider(is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
-			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:                            attributes.HTTPClientRequestSize.Prom,
-				Help:                            "size, in bytes, of the HTTP request body as sent from the client side",
-				Buckets:                         cfg.Buckets.RequestSizeHistogram,
-				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
-				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
-				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-			}, labelNames(attrHTTPClientRequestSize)).MetricVec, clock.Time, cfg.TTL)
-		}),
-		httpClientResponseSize: optionalHistogramProvider(is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
-			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:                            attributes.HTTPClientResponseSize.Prom,
-				Help:                            "size, in bytes, of the HTTP response body as sent from the client side",
-				Buckets:                         cfg.Buckets.ResponseSizeHistogram,
-				NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
-				NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
-				NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
-			}, labelNames(attrHTTPClientResponseSize)).MetricVec, clock.Time, cfg.TTL)
-		}),
+		//httpRequestSize: optionalHistogramProvider(is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
+		//	return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		//		Name:                            attributes.HTTPServerRequestSize.Prom,
+		//		Help:                            "size, in bytes, of the HTTP request body as received at the server side",
+		//		Buckets:                         cfg.Buckets.RequestSizeHistogram,
+		//		NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+		//		NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+		//		NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+		//	}, labelNames(attrHTTPRequestSize)).MetricVec, clock.Time, cfg.TTL)
+		//}),
+		//httpResponseSize: optionalHistogramProvider(is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
+		//	return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		//		Name:                            attributes.HTTPServerResponseSize.Prom,
+		//		Help:                            "size, in bytes, of the HTTP response body as received at the server side",
+		//		Buckets:                         cfg.Buckets.ResponseSizeHistogram,
+		//		NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+		//		NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+		//		NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+		//	}, labelNames(attrHTTPResponseSize)).MetricVec, clock.Time, cfg.TTL)
+		//}),
+		//httpClientRequestSize: optionalHistogramProvider(is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
+		//	return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		//		Name:                            attributes.HTTPClientRequestSize.Prom,
+		//		Help:                            "size, in bytes, of the HTTP request body as sent from the client side",
+		//		Buckets:                         cfg.Buckets.RequestSizeHistogram,
+		//		NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+		//		NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+		//		NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+		//	}, labelNames(attrHTTPClientRequestSize)).MetricVec, clock.Time, cfg.TTL)
+		//}),
+		//httpClientResponseSize: optionalHistogramProvider(is.HTTPEnabled(), func() *Expirer[prometheus.Histogram] {
+		//	return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		//		Name:                            attributes.HTTPClientResponseSize.Prom,
+		//		Help:                            "size, in bytes, of the HTTP response body as sent from the client side",
+		//		Buckets:                         cfg.Buckets.ResponseSizeHistogram,
+		//		NativeHistogramBucketFactor:     defaultHistogramBucketFactor,
+		//		NativeHistogramMaxBucketNumber:  defaultHistogramMaxBucketNumber,
+		//		NativeHistogramMinResetDuration: defaultHistogramMinResetDuration,
+		//	}, labelNames(attrHTTPClientResponseSize)).MetricVec, clock.Time, cfg.TTL)
+		//}),
 		spanMetricsLatency: optionalHistogramProvider(cfg.SpanMetricsEnabled(), func() *Expirer[prometheus.Histogram] {
 			return NewExpirer[prometheus.Histogram](prometheus.NewHistogramVec(prometheus.HistogramOpts{
 				Name:                            SpanMetricsLatency,
