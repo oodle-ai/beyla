@@ -187,19 +187,19 @@ type metricsReporter struct {
 	input               <-chan []request.Span
 	processEvents       <-chan exec.ProcessEvent
 
-	beylaInfo              *Expirer[prometheus.Gauge]
-	httpDuration           *Expirer[prometheus.Histogram]
-	httpClientDuration     *Expirer[prometheus.Histogram]
-	grpcDuration           *Expirer[prometheus.Histogram]
-	grpcClientDuration     *Expirer[prometheus.Histogram]
-	dbClientDuration       *Expirer[prometheus.Histogram]
-	msgPublishDuration     *Expirer[prometheus.Histogram]
-	msgProcessDuration     *Expirer[prometheus.Histogram]
-	httpRequestSize        *Expirer[prometheus.Histogram]
-	httpResponseSize       *Expirer[prometheus.Histogram]
-	httpClientRequestSize  *Expirer[prometheus.Histogram]
-	httpClientResponseSize *Expirer[prometheus.Histogram]
-	targetInfo             *prometheus.GaugeVec
+	beylaInfo          *Expirer[prometheus.Gauge]
+	httpDuration       *Expirer[prometheus.Histogram]
+	httpClientDuration *Expirer[prometheus.Histogram]
+	grpcDuration       *Expirer[prometheus.Histogram]
+	grpcClientDuration *Expirer[prometheus.Histogram]
+	dbClientDuration   *Expirer[prometheus.Histogram]
+	msgPublishDuration *Expirer[prometheus.Histogram]
+	msgProcessDuration *Expirer[prometheus.Histogram]
+	//httpRequestSize        *Expirer[prometheus.Histogram]
+	//httpResponseSize       *Expirer[prometheus.Histogram]
+	//httpClientRequestSize  *Expirer[prometheus.Histogram]
+	//httpClientResponseSize *Expirer[prometheus.Histogram]
+	targetInfo *prometheus.GaugeVec
 
 	// user-selected attributes for the application-level metrics
 	attrHTTPDuration           []attributes.Field[*request.Span, string]
@@ -641,11 +641,11 @@ func newReporter(
 	if cfg.OTelMetricsEnabled() {
 		if is.HTTPEnabled() {
 			registeredMetrics = append(registeredMetrics,
-				mr.httpClientRequestSize,
-				mr.httpClientResponseSize,
+				//mr.httpClientRequestSize,
+				//mr.httpClientResponseSize,
 				mr.httpClientDuration,
-				mr.httpRequestSize,
-				mr.httpResponseSize,
+				//mr.httpRequestSize,
+				//mr.httpResponseSize,
 				mr.httpDuration,
 			)
 		}
@@ -807,12 +807,12 @@ func (r *metricsReporter) observe(span *request.Span) {
 			if r.is.HTTPEnabled() {
 				labelVals := labelValues(span, r.attrHTTPDuration)
 				r.httpDuration.WithLabelValues(labelVals...).metric.Observe(duration)
-				r.httpRequestSize.WithLabelValues(
-					labelValues(span, r.attrHTTPRequestSize)...,
-				).metric.Observe(float64(span.RequestBodyLength()))
-				r.httpResponseSize.WithLabelValues(
-					labelValues(span, r.attrHTTPResponseSize)...,
-				).metric.Observe(float64(span.ResponseBodyLength()))
+				//r.httpRequestSize.WithLabelValues(
+				//	labelValues(span, r.attrHTTPRequestSize)...,
+				//).metric.Observe(float64(span.RequestBodyLength()))
+				//r.httpResponseSize.WithLabelValues(
+				//	labelValues(span, r.attrHTTPResponseSize)...,
+				//).metric.Observe(float64(span.ResponseBodyLength()))
 
 				// Log span for HTTP server metrics
 				r.spanLogger.LogSpan("http_server", span, func() map[string]string {
@@ -828,12 +828,12 @@ func (r *metricsReporter) observe(span *request.Span) {
 				r.httpClientDuration.WithLabelValues(
 					labelValues(span, r.attrHTTPClientDuration)...,
 				).metric.Observe(duration)
-				r.httpClientRequestSize.WithLabelValues(
-					labelValues(span, r.attrHTTPClientRequestSize)...,
-				).metric.Observe(float64(span.RequestBodyLength()))
-				r.httpClientResponseSize.WithLabelValues(
-					labelValues(span, r.attrHTTPClientResponseSize)...,
-				).metric.Observe(float64(span.ResponseBodyLength()))
+				//r.httpClientRequestSize.WithLabelValues(
+				//	labelValues(span, r.attrHTTPClientRequestSize)...,
+				//).metric.Observe(float64(span.RequestBodyLength()))
+				//r.httpClientResponseSize.WithLabelValues(
+				//	labelValues(span, r.attrHTTPClientResponseSize)...,
+				//).metric.Observe(float64(span.ResponseBodyLength()))
 
 				// Log span for HTTP client metrics
 				r.spanLogger.LogSpan("http_client", span, func() map[string]string {
