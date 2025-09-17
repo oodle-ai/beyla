@@ -127,7 +127,7 @@ var DefaultConfig = Config{
 		WildcardChar: "*",
 	},
 	NetworkFlows: defaultNetworkConfig,
-	AdminPort:    9091,
+	AdminPort:    6061,
 	Processes: process.CollectConfig{
 		RunMode:  process.RunModePrivileged,
 		Interval: 5 * time.Second,
