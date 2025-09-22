@@ -61,8 +61,8 @@ const (
 var DefaultResourceLabels = ResourceLabels{
 	// If a user sets useLabelsForResourceAttributes: false in its OTEL operator config, is the task of the
 	// OTEL operator to provide empty values for this.
-	// Disabled k8s service.name based resolution as it leads to duplicate nodes
-	//"service.name":      []string{"app.kubernetes.io/name"},
+	"service.name": []string{"app.kubernetes.io/name"},
+	// Disabled k8s service.namespace based resolution as it leads to duplicate nodes
 	//"service.namespace": []string{"app.kubernetes.io/part-of"},
 	//"service.version":   []string{"app.kubernetes.io/version"},
 }
