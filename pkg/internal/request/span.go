@@ -93,6 +93,39 @@ func (t EventType) String() string {
 	}
 }
 
+func (t EventType) Kind() string {
+	switch t {
+	case EventTypeProcessAlive:
+		return "Process"
+	case EventTypeHTTP:
+		return "HTTP"
+	case EventTypeGRPC:
+		return "GRPC"
+	case EventTypeHTTPClient:
+		return "HTTP"
+	case EventTypeGRPCClient:
+		return "GRPC"
+	case EventTypeSQLClient:
+		return "SQL"
+	case EventTypeRedisClient:
+		return "Redis"
+	case EventTypeKafkaClient:
+		return "Kafka"
+	case EventTypeRedisServer:
+		return "Redis"
+	case EventTypeKafkaServer:
+		return "Kafka"
+	case EventTypeGPUKernelLaunch:
+		return "GPU"
+	case EventTypeGPUMalloc:
+		return "GPU"
+	case EventTypeMongoClient:
+		return "Mongo"
+	default:
+		return fmt.Sprintf("UNKNOWN (%d)", t)
+	}
+}
+
 func (t EventType) MarshalText() ([]byte, error) {
 	return []byte(t.String()), nil
 }
