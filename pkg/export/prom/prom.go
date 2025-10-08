@@ -80,6 +80,7 @@ const (
 	clientNamespaceKey = "client_service_namespace"
 	serverKey          = "server"
 	serverNamespaceKey = "server_service_namespace"
+	kindKey            = "kind"
 	connectionTypeKey  = "connection_type"
 
 	// default values for the histogram configuration
@@ -1100,7 +1101,7 @@ func (r *metricsReporter) labelValuesTargetInfo(service *svc.Attrs) []string {
 }
 
 func labelNamesServiceGraph(kubeEnabled bool) []string {
-	names := []string{clientKey, clientNamespaceKey, serverKey, serverNamespaceKey, sourceKey}
+	names := []string{clientKey, clientNamespaceKey, serverKey, serverNamespaceKey, sourceKey, kindKey}
 
 	if kubeEnabled {
 		names = appendK8sLabelNames(names)
@@ -1132,6 +1133,7 @@ func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 			hostName,
 			span.OtherNamespace,
 			"beyla",
+			span.Type.Kind(),
 		}
 	} else {
 		peerName := request.SpanPeerName(span)
@@ -1142,6 +1144,7 @@ func (r *metricsReporter) labelValuesServiceGraph(span *request.Span) []string {
 			hostName,
 			span.Service.UID.Namespace,
 			"beyla",
+			span.Type.Kind(),
 		}
 	}
 
