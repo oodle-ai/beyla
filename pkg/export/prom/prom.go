@@ -1060,9 +1060,9 @@ func labelNamesTargetInfo(kubeEnabled bool, extraMetadataLabelNames []attr.Name)
 		osTypeKey,
 	}
 
-	if kubeEnabled {
-		names = appendK8sLabelNames(names)
-	}
+	//if kubeEnabled {
+	//	names = appendK8sLabelNames(names)
+	//}
 
 	for _, mdn := range extraMetadataLabelNames {
 		names = append(names, mdn.Prom())
@@ -1081,9 +1081,9 @@ func (r *metricsReporter) labelValuesTargetInfo(service *svc.Attrs) []string {
 		"linux",
 	}
 
-	if r.kubeEnabled {
-		values = appendK8sLabelValuesService(values, service)
-	}
+	//if r.kubeEnabled {
+	//	values = appendK8sLabelValuesService(values, service)
+	//}
 
 	for _, k := range r.extraMetadataLabels {
 		values = append(values, service.Metadata[k])
