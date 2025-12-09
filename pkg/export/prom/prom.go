@@ -200,7 +200,7 @@ type metricsReporter struct {
 	//httpResponseSize       *Expirer[prometheus.Histogram]
 	//httpClientRequestSize  *Expirer[prometheus.Histogram]
 	//httpClientResponseSize *Expirer[prometheus.Histogram]
-	targetInfo *prometheus.GaugeVec
+	//targetInfo *prometheus.GaugeVec
 
 	// user-selected attributes for the application-level metrics
 	attrHTTPDuration           []attributes.Field[*request.Span, string]
@@ -548,7 +548,7 @@ func newReporter(
 			return prometheus.NewGaugeVec(prometheus.GaugeOpts{
 				Name: TracesTargetInfo,
 				Help: "target service information in trace span metric format",
-			}, labelNamesTargetInfo(kubeEnabled, extraMetadataLabels))
+			}, labelNamesTargetInfo(false, extraMetadataLabels))
 		}),
 		tracesHostInfo: optionalGaugeProvider(cfg.SpanMetricsEnabled() || cfg.ServiceGraphMetricsEnabled(), func() *Expirer[prometheus.Gauge] {
 			return NewExpirer[prometheus.Gauge](prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -588,10 +588,10 @@ func newReporter(
 				Help: "number of service calls in trace service graph metrics format",
 			}, labelNamesServiceGraph(kubeEnabled)).MetricVec, clock.Time, cfg.TTL)
 		}),
-		targetInfo: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: TargetInfo,
-			Help: "attributes associated to a given monitored entity",
-		}, labelNamesTargetInfo(kubeEnabled, extraMetadataLabels)),
+		//targetInfo: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		//	Name: TargetInfo,
+		//	Help: "attributes associated to a given monitored entity",
+		//}, labelNamesTargetInfo(kubeEnabled, extraMetadataLabels)),
 		gpuKernelCallsTotal: optionalCounterProvider(is.GPUEnabled(), func() *Expirer[prometheus.Counter] {
 			return NewExpirer[prometheus.Counter](prometheus.NewCounterVec(prometheus.CounterOpts{
 				Name: attributes.GPUKernelLaunchCalls.Prom,
@@ -633,8 +633,8 @@ func newReporter(
 		mr.spanLogger = spanlog.NewSpanLogger(cfg.SpanLogging)
 	}
 
-	registeredMetrics := []prometheus.Collector{mr.targetInfo}
-
+	//registeredMetrics := []prometheus.Collector{mr.targetInfo}
+	registeredMetrics := []prometheus.Collector{}
 	if !mr.cfg.DisableBuildInfo {
 		registeredMetrics = append(registeredMetrics, mr.beylaInfo)
 	}
@@ -1052,12 +1052,8 @@ func (r *metricsReporter) labelValuesSpans(span *request.Span) []string {
 
 func labelNamesTargetInfo(kubeEnabled bool, extraMetadataLabelNames []attr.Name) []string {
 	names := []string{
-		hostIDKey,
-		hostNameKey,
 		serviceKey,
 		serviceNamespaceKey,
-		serviceInstanceKey,
-		serviceJobKey,
 		telemetryLanguageKey,
 		telemetrySDKKey,
 		sourceKey,
@@ -1077,12 +1073,8 @@ func labelNamesTargetInfo(kubeEnabled bool, extraMetadataLabelNames []attr.Name)
 
 func (r *metricsReporter) labelValuesTargetInfo(service *svc.Attrs) []string {
 	values := []string{
-		r.hostID,
-		service.HostName,
 		service.UID.Name,
 		service.UID.Namespace,
-		service.UID.Instance, // app instance ID
-		service.Job(),
 		service.SDKLanguage.String(),
 		"beyla",
 		"beyla",
@@ -1171,10 +1163,10 @@ func labelValues[T any](s T, getters []attributes.Field[T, string]) []string {
 	return values
 }
 
-func (r *metricsReporter) createTargetInfo(service *svc.Attrs) {
-	targetInfoLabelValues := r.labelValuesTargetInfo(service)
-	r.targetInfo.WithLabelValues(targetInfoLabelValues...).Set(1)
-}
+//func (r *metricsReporter) createTargetInfo(service *svc.Attrs) {
+//	targetInfoLabelValues := r.labelValuesTargetInfo(service)
+//	r.targetInfo.WithLabelValues(targetInfoLabelValues...).Set(1)
+//}
 
 func (r *metricsReporter) createTracesTargetInfo(service *svc.Attrs) {
 	if !r.cfg.SpanMetricsEnabled() && !r.cfg.ServiceGraphMetricsEnabled() {
@@ -1192,10 +1184,10 @@ func (r *metricsReporter) origService(uid svc.UID, service *svc.Attrs) *svc.Attr
 	return orig
 }
 
-func (r *metricsReporter) deleteTargetInfo(uid svc.UID, service *svc.Attrs) {
-	targetInfoLabelValues := r.labelValuesTargetInfo(r.origService(uid, service))
-	r.targetInfo.DeleteLabelValues(targetInfoLabelValues...)
-}
+//func (r *metricsReporter) deleteTargetInfo(uid svc.UID, service *svc.Attrs) {
+//	targetInfoLabelValues := r.labelValuesTargetInfo(r.origService(uid, service))
+//	r.targetInfo.DeleteLabelValues(targetInfoLabelValues...)
+//}
 
 func (r *metricsReporter) deleteTracesTargetInfo(uid svc.UID, service *svc.Attrs) {
 	if !r.cfg.SpanMetricsEnabled() && !r.cfg.ServiceGraphMetricsEnabled() {
@@ -1212,11 +1204,11 @@ func (r *metricsReporter) watchForProcessEvents() {
 		uid := pe.File.Service.UID
 
 		if pe.Type == exec.ProcessEventCreated {
-			r.createTargetInfo(&pe.File.Service)
+			// r.createTargetInfo(&pe.File.Service)
 			r.createTracesTargetInfo(&pe.File.Service)
 			r.serviceMap[uid] = pe.File.Service
 		} else {
-			r.deleteTargetInfo(uid, &pe.File.Service)
+			// r.deleteTargetInfo(uid, &pe.File.Service)
 			r.deleteTracesTargetInfo(uid, &pe.File.Service)
 			delete(r.serviceMap, uid)
 		}
